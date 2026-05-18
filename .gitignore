@@ -1,0 +1,46 @@
+# ===========================
+# Root .gitignore
+# ===========================
+
+# Dependencies
+node_modules/
+
+# Firebase leftovers (accidental init)
+dataconnect/
+firebase-debug.log
+.firebase/
+.firebaserc
+firebase.json
+src/dataconnect-generated/
+
+# Local data store (JSON database - not for git)
+.data/
+
+# Log files
+*.log
+*.err
+frontend-dev.log
+frontend-dev.err
+frontend-start.log
+frontend-start.err
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Environment files (never commit secrets)
+.env
+.env.local
+.env.*.local
+
+# Build outputs
+.next/
+out/
+build/
+dist/
+
+# Misc
+*.pem
+project-backups/
+start-webpage.cmd
