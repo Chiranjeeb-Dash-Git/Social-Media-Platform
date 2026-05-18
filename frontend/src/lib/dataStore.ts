@@ -160,7 +160,7 @@ const hydratePost = async (postRow: any) => {
 
 const dataStore = {
   post: {
-    findMany: async () => {
+    findMany: async (args?: any) => {
       await initSchema();
       const res = await pool.query("SELECT * FROM app_posts ORDER BY created_at DESC");
       return Promise.all(res.rows.map(hydratePost));
@@ -284,7 +284,7 @@ const dataStore = {
         _count: { posts: posts.length }
       };
     },
-    findMany: async () => {
+    findMany: async (args?: any) => {
       await initSchema();
       const res = await pool.query("SELECT * FROM app_communities");
       
