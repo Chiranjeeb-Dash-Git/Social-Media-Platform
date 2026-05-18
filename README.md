@@ -1,101 +1,115 @@
-# Reddit Clone — Social Media Platform
+# 🌐 Reddit Clone: Full-Stack Social Media Platform
 
-A full-stack Reddit-style social media platform built with **Next.js 16**, **Express.js**, **Tailwind CSS**, and **TypeScript**.
+![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)
+![React](https://img.shields.io/badge/React-18-blue?style=for-the-badge&logo=react)
+![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
+![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
 
-![Reddit Clone](https://img.shields.io/badge/Next.js-16-black?logo=next.js) ![Express](https://img.shields.io/badge/Express-4.x-green?logo=express) ![TypeScript](https://img.shields.io/badge/TypeScript-5-blue?logo=typescript) ![TailwindCSS](https://img.shields.io/badge/Tailwind-3-38bdf8?logo=tailwindcss)
+A full-stack, high-performance web application designed to replicate the core features of Reddit. It features a modern, "Dark Cinematic" UI design and is built for speed and scalability.
 
----
-
-## ✨ Features
-
-- 📝 **Create & browse posts** across communities
-- 👍 **Upvote / Downvote** with optimistic UI updates
-- 💬 **Comments** on posts
-- 🔐 **User authentication** (register & login)
-- 🏘️ **Communities** — browse, filter by subreddit
-- 📊 **Trending page** with hot posts
-- 👤 **User profiles**
-- 🌙 **Dark mode** (cinematic UI)
-- ⚡ **Fast** — powered by Next.js Turbopack
+This project was recently refactored into a **modern Next.js 16 Serverless application** backed by a **Neon PostgreSQL** database, making it fully ready for production deployment on Vercel.
 
 ---
 
-## 🗂️ Project Structure
+## 🚀 Features
 
-```
-Social Media Platform/
-├── frontend/          # Next.js 16 app (UI + API routes)
-│   ├── src/
-│   │   ├── app/       # Pages & API routes (App Router)
-│   │   ├── components/ # Reusable UI components
-│   │   ├── contexts/  # React context (auth, etc.)
-│   │   └── lib/       # Data store & utilities
-│   └── ...
-└── backend/           # Express.js API server (optional)
-    └── server.js
-```
+- **Dynamic Feed:** View, sort, and interact with posts across the platform.
+- **Community Subreddits:** Dedicated pages for different topics (e.g., Programming, Next.js, Design).
+- **Post & Comment:** Create text, image, or link posts, and engage in nested discussions.
+- **Voting System:** Upvote or downvote posts with real-time score calculation.
+- **Authentication:** Custom JWT bearer-token session management without heavy external dependencies.
+- **Serverless Ready:** Built specifically to deploy perfectly on Vercel Edge/Node environments without memory bloat.
 
 ---
 
-## 🚀 Quick Start
+## 💻 Technology Stack
 
-### Prerequisites
-- **Node.js** v18 or higher
+### Frontend & Core Framework
+* **Next.js 16 (App Router):** Handles both the React frontend and the backend API routes via serverless functions.
+* **React 18:** Core UI library.
+* **TypeScript:** End-to-end type safety.
+* **Turbopack:** Ultra-fast local development bundler (`--turbo`).
 
-### 1. Install dependencies
+### UI & Styling
+* **Tailwind CSS:** Utility-first CSS framework for styling.
+* **Radix UI:** Unstyled, accessible UI primitives (Dialogs, Dropdowns, Avatars, etc.).
+* **Framer Motion:** Smooth micro-animations and transitions.
+* **Lucide React:** Beautiful, consistent iconography.
 
-```bash
-# Install frontend dependencies
-cd frontend
-npm install
-
-# Install backend dependencies (optional)
-cd ../backend
-npm install
-```
-
-### 2. Run the development servers
-
-**Frontend (Next.js):**
-```bash
-cd frontend
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) 🎉
-
-**Backend (Express, optional):**
-```bash
-cd backend
-npm run dev
-```
-Runs on [http://localhost:5000](http://localhost:5000)
+### Database & Data Management
+* **Database:** PostgreSQL (Hosted on Neon.tech).
+* **Driver:** `pg` (Node Postgres) with connection pooling.
+* **Architecture:** The database schema is auto-initialized on the first API hit if it doesn't exist, eliminating the need for complex manual migrations.
 
 ---
 
-## ⚙️ Environment Variables
+## 🗄️ Database Schema
 
-The app works out-of-the-box with no environment variables — it uses a local JSON data store by default.
+The database uses a clean relational structure designed for performance:
 
-To connect a real PostgreSQL database, create `frontend/.env`:
-```env
-# Copy from frontend/.env.example
-DATABASE_URL="postgresql://USER:PASSWORD@HOST:5432/DATABASE"
-```
-
----
-
-## 🛠️ Tech Stack
-
-| Layer | Technology |
-|-------|-----------|
-| Frontend | Next.js 16 (App Router), React 18, TypeScript |
-| Styling | Tailwind CSS, Radix UI, Framer Motion |
-| Backend | Express.js 4, Node.js |
-| Database | JSON file store (dev) / PostgreSQL (prod) |
-| Auth | Session tokens (JWT-compatible) |
+* **`app_users`**: Stores user profiles (`username`, `karma`, etc.)
+* **`app_communities`**: Subreddits/Categories for posts.
+* **`app_posts`**: The core content generated by users.
+* **`app_comments`**: Text discussions attached to posts.
+* **`app_votes`**: Tracks upvotes and downvotes via composite primary keys `(user_id, post_id)` to ensure single votes.
+* **`app_sessions`**: JWT/Token-based session management.
 
 ---
 
-## 📄 License
+## 📡 API Architecture (Next.js Route Handlers)
 
-MIT — feel free to use this project for learning or as a starter template.
+All backend logic exists within the Next.js App Router API directory (`frontend/src/app/api/`):
+
+* `/api/auth/register` & `/api/auth/login`: Handles token generation and credential validation.
+* `/api/communities`: Fetches a list of all communities, including post counts.
+* `/api/posts`: Fetches the feed (hydrated with author, community, and vote counts concurrently).
+* `/api/vote`: Toggles a vote (upvote/downvote/remove) for a specific post.
+* `/api/comments`: Retrieves and posts new comments to discussions.
+
+---
+
+## ⚡ Key Performance Optimizations
+
+1. **Concurrent Hydration:** When a post is fetched, the API concurrently fetches the author, community, vote count, and comment count using `Promise.all`. This ensures a single API call provides the frontend with all the data it needs to render a rich Post Card without waterfall fetching.
+2. **Turbopack Config:** The `next.config.js` is strictly optimized for Turbopack (`turbopack: {}`) and uses `optimizePackageImports` for `lucide-react` to ensure blazing-fast local compilation speeds.
+3. **No Migration Bottlenecks:** Because the app relies on `pg` and auto-initializes its schema on boot, it requires exactly zero manual database migrations. 
+
+---
+
+## 🛠️ Local Development
+
+To run this project locally:
+
+1. **Clone the repository:**
+   ```bash
+   git clone https://github.com/Chiranjeeb-Dash-Git/Social-Media-Platform.git
+   cd Social-Media-Platform/frontend
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   npm install
+   ```
+
+3. **Set up Environment Variables:**
+   Create a `.env` file in the `frontend` directory and add your Neon PostgreSQL connection string:
+   ```env
+   DATABASE_URL="postgresql://user:password@endpoint.neon.tech/neondb?sslmode=require"
+   ```
+
+4. **Start the Development Server:**
+   ```bash
+   npm run dev
+   ```
+
+---
+
+## 🌐 Deployment (Vercel)
+
+This project is perfectly tuned for Vercel deployment:
+1. Import the repository into Vercel.
+2. Ensure the **Root Directory** is set to `frontend`.
+3. Add the `DATABASE_URL` to the Environment Variables.
+4. Deploy! The database tables will be generated automatically on the very first visit.
