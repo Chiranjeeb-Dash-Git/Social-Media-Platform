@@ -2,10 +2,14 @@
   "name": "reddit-clone-mvp",
   "version": "1.0.0",
   "private": true,
+  "workspaces": [
+    "frontend",
+    "backend"
+  ],
   "scripts": {
-    "dev": "node frontend/node_modules/next/dist/bin/next dev frontend",
-    "build": "node frontend/node_modules/next/dist/bin/next build frontend",
-    "start": "node frontend/node_modules/next/dist/bin/next start frontend",
+    "dev": "npm --prefix frontend run dev",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix frontend run start",
     "setup": "npm install"
   }
 }
