@@ -31,7 +31,9 @@ const shouldUsePostgresSsl = (url: string) => {
 
 const pool = new Pool({
   connectionString,
-  max: 15,
+  max: process.env.VERCEL ? 3 : 15,
+  idleTimeoutMillis: 10000,
+  connectionTimeoutMillis: 5000,
   ssl: shouldUsePostgresSsl(connectionString)
     ? { rejectUnauthorized: false }
     : undefined,
@@ -41,8 +43,9 @@ let schemaInitialized = false;
 
 const initSchema = async () => {
   if (schemaInitialized) return;
-  
-  await pool.query(`
+  schemaInitialized = true;
+  try {
+    await pool.query(`
     CREATE TABLE IF NOT EXISTS app_users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
@@ -263,14 +266,25 @@ const initSchema = async () => {
   // Seed sample public Creator Page if empty
   const pagesCount = await pool.query("SELECT id FROM app_pages LIMIT 1");
   if (pagesCount.rowCount === 0) {
-    const guestUser = await dataStore.auth.getOrCreateGuestUser();
+    let guestRes = await pool.query("SELECT * FROM app_users WHERE username = 'guest'");
+    if (guestRes.rows.length === 0) {
+      const id = randomUUID();
+      guestRes = await pool.query(
+        `INSERT INTO app_users (id, username, email, password, image, bio, role) 
+         VALUES ($1, 'guest', 'guest@example.com', 'guest', 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest', 'Guest user', 'admin') RETURNING *`,
+        [id]
+      );
+    }
+    const guestId = guestRes.rows[0]?.id || "guest-1";
     await pool.query(
       "INSERT INTO app_pages (id, name, category, description, cover_photo, avatar, owner_id, followers, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING",
-      ["page-1", "Next.js Developers", "Tech & Gaming", "The official public page for Next.js full-stack developers and enthusiasts.", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80", "https://api.dicebear.com/7.x/initials/svg?seed=nextjs&backgroundColor=000000", guestUser.id, 1250, new Date().toISOString()]
+      ["page-1", "Next.js Developers", "Tech & Gaming", "The official public page for Next.js full-stack developers and enthusiasts.", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80", "https://api.dicebear.com/7.x/initials/svg?seed=nextjs&backgroundColor=000000", guestId, 1250, new Date().toISOString()]
     );
   }
-
-  schemaInitialized = true;
+  } catch (error) {
+    schemaInitialized = false;
+    throw error;
+  }
 };
 
 // Utilities
@@ -291,67 +305,103 @@ const mapUser = (row: any) => ({
   role: row.role || "user",
 });
 
-const hydratePost = async (postRow: any) => {
+const batchFetchUsers = async (userIds: string[]) => {
+  const uniqueIds = Array.from(new Set(userIds.filter(Boolean)));
+  if (uniqueIds.length === 0) return new Map<string, any>();
+  const res = await pool.query("SELECT * FROM app_users WHERE id = ANY($1)", [uniqueIds]);
+  return new Map<string, any>(res.rows.map((u: any) => [u.id, mapUser(u)]));
+};
+
+const hydratePosts = async (postRows: any[]) => {
+  if (!postRows || postRows.length === 0) return [];
+  const authorIds = Array.from(new Set(postRows.map(p => p.author_id).filter(Boolean)));
+  const communityIds = Array.from(new Set(postRows.map(p => p.community_id).filter(Boolean)));
+  const postIds = Array.from(new Set(postRows.map(p => p.id).filter(Boolean)));
+
   const [authorRes, communityRes, votesRes, commentsRes, reactionsRes] = await Promise.all([
-    pool.query("SELECT * FROM app_users WHERE id = $1", [postRow.author_id]),
-    pool.query("SELECT * FROM app_communities WHERE id = $1", [postRow.community_id]),
-    pool.query("SELECT * FROM app_votes WHERE post_id = $1", [postRow.id]),
-    pool.query("SELECT COUNT(*) as count FROM app_comments WHERE post_id = $1", [postRow.id]),
-    pool.query("SELECT * FROM app_reactions WHERE post_id = $1", [postRow.id])
+    authorIds.length > 0 ? pool.query("SELECT * FROM app_users WHERE id = ANY($1)", [authorIds]) : { rows: [] },
+    communityIds.length > 0 ? pool.query("SELECT * FROM app_communities WHERE id = ANY($1)", [communityIds]) : { rows: [] },
+    postIds.length > 0 ? pool.query("SELECT * FROM app_votes WHERE post_id = ANY($1)", [postIds]) : { rows: [] },
+    postIds.length > 0 ? pool.query("SELECT post_id, COUNT(*) as count FROM app_comments WHERE post_id = ANY($1) GROUP BY post_id", [postIds]) : { rows: [] },
+    postIds.length > 0 ? pool.query("SELECT * FROM app_reactions WHERE post_id = ANY($1)", [postIds]) : { rows: [] }
   ]);
 
-  const author = authorRes.rows[0];
-  const community = communityRes.rows[0];
-  const votes = votesRes.rows;
-  const reactions = reactionsRes.rows;
-
-  const reactionCounts: Record<string, number> = {
-    LIKE: 0, LOVE: 0, CARE: 0, HAHA: 0, WOW: 0, SAD: 0, ANGRY: 0
-  };
-  reactions.forEach((r: any) => {
-    if (reactionCounts[r.type] !== undefined) {
-      reactionCounts[r.type]++;
-    } else {
-      reactionCounts[r.type] = 1;
-    }
+  const authorsMap = new Map<string, any>(authorRes.rows.map((u: any) => [u.id, mapUser(u)]));
+  const communitiesMap = new Map<string, any>(communityRes.rows.map((c: any) => [c.id, { id: c.id, name: c.name, icon: c.icon }]));
+  const votesByPost = new Map<string, any[]>();
+  votesRes.rows.forEach((v: any) => {
+    const list = votesByPost.get(v.post_id) || [];
+    list.push(v);
+    votesByPost.set(v.post_id, list);
+  });
+  const commentsCountByPost = new Map<string, number>(commentsRes.rows.map((c: any) => [c.post_id, parseInt(c.count, 10) || 0]));
+  const reactionsByPost = new Map<string, any[]>();
+  reactionsRes.rows.forEach((r: any) => {
+    const list = reactionsByPost.get(r.post_id) || [];
+    list.push(r);
+    reactionsByPost.set(r.post_id, list);
   });
 
-  return {
-    id: postRow.id,
-    title: postRow.title,
-    content: postRow.content,
-    type: postRow.type,
-    url: postRow.url,
-    imageUrl: postRow.image_url,
-    createdAt: postRow.created_at,
-    updatedAt: postRow.updated_at,
-    author: author ? mapUser(author) : null,
-    community: community ? { id: community.id, name: community.name, icon: community.icon } : null,
-    upvotes: votes.filter((v: any) => v.type === "UP").length,
-    downvotes: votes.filter((v: any) => v.type === "DOWN").length,
-    votes: votes.map((v: any) => ({ userId: v.user_id, postId: v.post_id, type: v.type })),
-    reactions: reactions.map((r: any) => ({ id: r.id, userId: r.user_id, postId: r.post_id, type: r.type })),
-    reactionCounts,
-    privacy: postRow.privacy || "PUBLIC",
-    privacyExceptions: typeof postRow.privacy_exceptions === "string" ? JSON.parse(postRow.privacy_exceptions) : (postRow.privacy_exceptions || []),
-    privacyListId: postRow.privacy_list_id || null,
-    feelingActivity: postRow.feeling_activity || null,
-    locationTag: postRow.location_tag || null,
-    bgColorCard: postRow.bg_color_card || null,
-    mediaUrls: typeof postRow.media_urls === "string" ? JSON.parse(postRow.media_urls) : (postRow.media_urls || []),
-    pollData: typeof postRow.poll_data === "string" ? JSON.parse(postRow.poll_data) : (postRow.poll_data || null),
-    isLive: Boolean(postRow.is_live),
-    sharedFromId: postRow.shared_from_id || null,
-    _count: { comments: parseInt(commentsRes.rows[0].count, 10) }
-  };
+  return postRows.map((postRow: any) => {
+    const author = authorsMap.get(postRow.author_id) || null;
+    const community = communitiesMap.get(postRow.community_id) || null;
+    const votes = votesByPost.get(postRow.id) || [];
+    const reactions = reactionsByPost.get(postRow.id) || [];
+
+    const reactionCounts: Record<string, number> = {
+      LIKE: 0, LOVE: 0, CARE: 0, HAHA: 0, WOW: 0, SAD: 0, ANGRY: 0
+    };
+    reactions.forEach((r: any) => {
+      if (reactionCounts[r.type] !== undefined) {
+        reactionCounts[r.type]++;
+      } else {
+        reactionCounts[r.type] = 1;
+      }
+    });
+
+    return {
+      id: postRow.id,
+      title: postRow.title,
+      content: postRow.content,
+      type: postRow.type,
+      url: postRow.url,
+      imageUrl: postRow.image_url,
+      createdAt: postRow.created_at,
+      updatedAt: postRow.updated_at,
+      author: author as any,
+      community: community as any,
+      upvotes: votes.filter((v: any) => v.type === "UP").length,
+      downvotes: votes.filter((v: any) => v.type === "DOWN").length,
+      votes: votes.map((v: any) => ({ userId: v.user_id, postId: v.post_id, type: v.type })),
+      reactions: reactions.map((r: any) => ({ id: r.id, userId: r.user_id, postId: r.post_id, type: r.type })),
+      reactionCounts,
+      privacy: postRow.privacy || "PUBLIC",
+      privacyExceptions: typeof postRow.privacy_exceptions === "string" ? JSON.parse(postRow.privacy_exceptions) : (postRow.privacy_exceptions || []),
+      privacyListId: postRow.privacy_list_id || null,
+      feelingActivity: postRow.feeling_activity || null,
+      locationTag: postRow.location_tag || null,
+      bgColorCard: postRow.bg_color_card || null,
+      mediaUrls: typeof postRow.media_urls === "string" ? JSON.parse(postRow.media_urls) : (postRow.media_urls || []),
+      pollData: typeof postRow.poll_data === "string" ? JSON.parse(postRow.poll_data) : (postRow.poll_data || null),
+      isLive: Boolean(postRow.is_live),
+      sharedFromId: postRow.shared_from_id || null,
+      _count: { comments: commentsCountByPost.get(postRow.id) || 0 }
+    };
+  });
+};
+
+const hydratePost = async (postRow: any) => {
+  if (!postRow) return null;
+  const res = await hydratePosts([postRow]);
+  return res[0] || null;
 };
 
 const dataStore = {
   post: {
     findMany: async (args?: any) => {
       await initSchema();
-      const res = await pool.query("SELECT * FROM app_posts ORDER BY created_at DESC");
-      return Promise.all(res.rows.map(hydratePost));
+      const res = await pool.query("SELECT * FROM app_posts ORDER BY created_at DESC LIMIT 50");
+      return hydratePosts(res.rows);
     },
     findUnique: async (args: any) => {
       await initSchema();
@@ -427,15 +477,26 @@ const dataStore = {
     findMany: async (args: { where: { postId: string } }) => {
       await initSchema();
       const res = await pool.query("SELECT * FROM app_comments WHERE post_id = $1 ORDER BY created_at ASC", [args.where.postId]);
-      
-      return Promise.all(res.rows.map(async (row: any) => {
-        const [authorRes, reactionsRes] = await Promise.all([
-          pool.query("SELECT * FROM app_users WHERE id = $1", [row.author_id]),
-          pool.query("SELECT * FROM app_reactions WHERE comment_id = $1", [row.id])
-        ]);
-        
+      if (res.rows.length === 0) return [];
+
+      const authorIds = res.rows.map(r => r.author_id);
+      const commentIds = res.rows.map(r => r.id);
+      const [authorsMap, reactionsRes] = await Promise.all([
+        batchFetchUsers(authorIds),
+        commentIds.length > 0 ? pool.query("SELECT * FROM app_reactions WHERE comment_id = ANY($1)", [commentIds]) : { rows: [] }
+      ]);
+
+      const reactionsByComment = new Map<string, any[]>();
+      reactionsRes.rows.forEach((r: any) => {
+        const list = reactionsByComment.get(r.comment_id) || [];
+        list.push(r);
+        reactionsByComment.set(r.comment_id, list);
+      });
+
+      return res.rows.map((row: any) => {
+        const reactions = reactionsByComment.get(row.id) || [];
         const reactionCounts: Record<string, number> = { LIKE: 0, LOVE: 0, HAHA: 0, WOW: 0, SAD: 0, ANGRY: 0 };
-        reactionsRes.rows.forEach((r: any) => {
+        reactions.forEach((r: any) => {
           reactionCounts[r.type] = (reactionCounts[r.type] || 0) + 1;
         });
 
@@ -448,11 +509,11 @@ const dataStore = {
           gifUrl: row.gif_url || null,
           createdAt: row.created_at,
           updatedAt: row.updated_at,
-          author: authorRes.rows[0] ? mapUser(authorRes.rows[0]) : null,
-          reactions: reactionsRes.rows.map((r: any) => ({ id: r.id, userId: r.user_id, type: r.type })),
+          author: authorsMap.get(row.author_id) || null,
+          reactions: reactions.map((r: any) => ({ id: r.id, userId: r.user_id, type: r.type })),
           reactionCounts
         };
-      }));
+      });
     },
     create: async (args: { data: { postId: string, content: string, authorId: string, parentId?: string, mediaUrl?: string, gifUrl?: string } }) => {
       await initSchema();
@@ -500,7 +561,7 @@ const dataStore = {
       const community = res.rows[0];
       
       const postsRes = await pool.query("SELECT * FROM app_posts WHERE community_id = $1 ORDER BY created_at DESC", [community.id]);
-      const posts = await Promise.all(postsRes.rows.map(hydratePost));
+      const posts = await hydratePosts(postsRes.rows);
       
       return {
         id: community.id,
@@ -515,19 +576,20 @@ const dataStore = {
     },
     findMany: async (args?: any) => {
       await initSchema();
-      const res = await pool.query("SELECT * FROM app_communities");
+      const [commsRes, countsRes] = await Promise.all([
+        pool.query("SELECT * FROM app_communities"),
+        pool.query("SELECT community_id, COUNT(*) as count FROM app_posts GROUP BY community_id")
+      ]);
+      const countMap = new Map(countsRes.rows.map((r: any) => [r.community_id, parseInt(r.count, 10) || 0]));
       
-      return Promise.all(res.rows.map(async (row: any) => {
-        const postsCountRes = await pool.query("SELECT COUNT(*) as count FROM app_posts WHERE community_id = $1", [row.id]);
-        return {
-          id: row.id,
-          name: row.name,
-          description: row.description,
-          createdAt: row.created_at,
-          members: row.members,
-          icon: row.icon,
-          _count: { posts: parseInt(postsCountRes.rows[0].count, 10) }
-        };
+      return commsRes.rows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        description: row.description,
+        createdAt: row.created_at,
+        members: row.members,
+        icon: row.icon,
+        _count: { posts: countMap.get(row.id) || 0 }
       }));
     }
   },
@@ -776,19 +838,17 @@ const dataStore = {
     findMany: async () => {
       await initSchema();
       const res = await pool.query("SELECT * FROM app_pages ORDER BY followers DESC");
-      return Promise.all(res.rows.map(async (row: any) => {
-        const ownerRes = await pool.query("SELECT * FROM app_users WHERE id = $1", [row.owner_id]);
-        return {
-          id: row.id,
-          name: row.name,
-          category: row.category,
-          description: row.description,
-          coverPhoto: row.cover_photo,
-          avatar: row.avatar,
-          followers: row.followers,
-          createdAt: row.created_at,
-          owner: ownerRes.rows[0] ? mapUser(ownerRes.rows[0]) : null
-        };
+      const ownersMap = await batchFetchUsers(res.rows.map((r: any) => r.owner_id));
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        name: row.name,
+        category: row.category,
+        description: row.description,
+        coverPhoto: row.cover_photo,
+        avatar: row.avatar,
+        followers: row.followers,
+        createdAt: row.created_at,
+        owner: ownersMap.get(row.owner_id) || null
       }));
     },
     findUnique: async (id: string) => {
@@ -826,22 +886,20 @@ const dataStore = {
   marketplace: {
     findMany: async (args?: any) => {
       await initSchema();
-      const res = await pool.query("SELECT * FROM app_marketplace_items WHERE status = 'AVAILABLE' ORDER BY created_at DESC");
-      return Promise.all(res.rows.map(async (row: any) => {
-        const sellerRes = await pool.query("SELECT * FROM app_users WHERE id = $1", [row.seller_id]);
-        return {
-          id: row.id,
-          title: row.title,
-          description: row.description,
-          price: Number(row.price),
-          location: row.location,
-          category: row.category,
-          condition: row.condition,
-          imageUrls: typeof row.image_urls === "string" ? JSON.parse(row.image_urls) : (row.image_urls || []),
-          status: row.status,
-          createdAt: row.created_at,
-          seller: sellerRes.rows[0] ? mapUser(sellerRes.rows[0]) : null
-        };
+      const res = await pool.query("SELECT * FROM app_marketplace_items WHERE status = 'AVAILABLE' ORDER BY created_at DESC LIMIT 50");
+      const sellersMap = await batchFetchUsers(res.rows.map((r: any) => r.seller_id));
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        price: Number(row.price),
+        location: row.location,
+        category: row.category,
+        condition: row.condition,
+        imageUrls: typeof row.image_urls === "string" ? JSON.parse(row.image_urls) : (row.image_urls || []),
+        status: row.status,
+        createdAt: row.created_at,
+        seller: sellersMap.get(row.seller_id) || null
       }));
     },
     create: async (data: any) => {
@@ -903,20 +961,18 @@ const dataStore = {
     },
     getMessages: async (conversationId: string) => {
       await initSchema();
-      const res = await pool.query("SELECT * FROM app_messages WHERE conversation_id = $1 ORDER BY created_at ASC", [conversationId]);
-      return Promise.all(res.rows.map(async (row: any) => {
-        const senderRes = await pool.query("SELECT * FROM app_users WHERE id = $1", [row.sender_id]);
-        return {
-          id: row.id,
-          conversationId: row.conversation_id,
-          senderId: row.sender_id,
-          content: row.content,
-          mediaUrl: row.media_url || null,
-          voiceNoteUrl: row.voice_note_url || null,
-          createdAt: row.created_at,
-          reactions: typeof row.reactions === "string" ? JSON.parse(row.reactions) : (row.reactions || {}),
-          sender: senderRes.rows[0] ? mapUser(senderRes.rows[0]) : null
-        };
+      const res = await pool.query("SELECT * FROM app_messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT 100", [conversationId]);
+      const sendersMap = await batchFetchUsers(res.rows.map((r: any) => r.sender_id));
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        conversationId: row.conversation_id,
+        senderId: row.sender_id,
+        content: row.content,
+        mediaUrl: row.media_url || null,
+        voiceNoteUrl: row.voice_note_url || null,
+        createdAt: row.created_at,
+        reactions: typeof row.reactions === "string" ? JSON.parse(row.reactions) : (row.reactions || {}),
+        sender: sendersMap.get(row.sender_id) || null
       }));
     },
     sendMessage: async (data: { conversationId: string, senderId: string, content?: string, mediaUrl?: string, voiceNoteUrl?: string }) => {
@@ -993,19 +1049,17 @@ const dataStore = {
     findMany: async (userId: string) => {
       await initSchema();
       const res = await pool.query("SELECT * FROM app_notifications WHERE user_id = $1 ORDER BY created_at DESC LIMIT 30", [userId]);
-      return Promise.all(res.rows.map(async (row: any) => {
-        const actorRes = row.actor_id ? await pool.query("SELECT * FROM app_users WHERE id = $1", [row.actor_id]) : { rows: [] };
-        return {
-          id: row.id,
-          userId: row.user_id,
-          actorId: row.actor_id || null,
-          type: row.type,
-          content: row.content,
-          link: row.link || "/",
-          isRead: row.is_read,
-          createdAt: row.created_at,
-          actor: actorRes.rows[0] ? mapUser(actorRes.rows[0]) : null
-        };
+      const actorsMap = await batchFetchUsers(res.rows.map((r: any) => r.actor_id));
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        userId: row.user_id,
+        actorId: row.actor_id || null,
+        type: row.type,
+        content: row.content,
+        link: row.link || "/",
+        isRead: row.is_read,
+        createdAt: row.created_at,
+        actor: actorsMap.get(row.actor_id) || null
       }));
     },
     create: async (data: { userId: string, actorId?: string, type: string, content: string, link?: string }) => {
@@ -1034,19 +1088,17 @@ const dataStore = {
   report: {
     findMany: async () => {
       await initSchema();
-      const res = await pool.query("SELECT * FROM app_reports ORDER BY created_at DESC");
-      return Promise.all(res.rows.map(async (row: any) => {
-        const reporterRes = await pool.query("SELECT * FROM app_users WHERE id = $1", [row.reporter_id]);
-        return {
-          id: row.id,
-          reporterId: row.reporter_id,
-          targetType: row.target_type,
-          targetId: row.target_id,
-          reason: row.reason,
-          status: row.status,
-          createdAt: row.created_at,
-          reporter: reporterRes.rows[0] ? mapUser(reporterRes.rows[0]) : null
-        };
+      const res = await pool.query("SELECT * FROM app_reports ORDER BY created_at DESC LIMIT 50");
+      const reportersMap = await batchFetchUsers(res.rows.map((r: any) => r.reporter_id));
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        reporterId: row.reporter_id,
+        targetType: row.target_type,
+        targetId: row.target_id,
+        reason: row.reason,
+        status: row.status,
+        createdAt: row.created_at,
+        reporter: reportersMap.get(row.reporter_id) || null
       }));
     },
     create: async (data: { reporterId: string, targetType: "POST" | "COMMENT" | "USER", targetId: string, reason: string }) => {
@@ -1078,7 +1130,7 @@ const dataStore = {
         pool.query("SELECT * FROM app_marketplace_items WHERE status = 'AVAILABLE' AND (LOWER(title) LIKE $1 OR LOWER(description) LIKE $1) LIMIT 15", [term])
       ]);
 
-      const posts = await Promise.all(postsRes.rows.map(hydratePost));
+      const posts = await hydratePosts(postsRes.rows);
 
       return {
         users: usersRes.rows.map(mapUser),

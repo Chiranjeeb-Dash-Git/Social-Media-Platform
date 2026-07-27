@@ -14,7 +14,7 @@ const getToken = (req: Request) => {
     : null;
 };
 
-const getAuthenticatedUser = async (req: Request) => {
+const getAuthenticatedUser = async (req: Request): Promise<any> => {
   const token = getToken(req);
   return token ? dataStore.auth.getUserFromToken(token) : null;
 };

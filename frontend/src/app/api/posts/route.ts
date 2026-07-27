@@ -19,25 +19,33 @@ const getActor = async (req: Request) => {
 export async function GET(req: Request) {
   try {
     const user = await getActor(req);
+    const userId: string = (user as any)?.id || "guest";
     const allPosts = await dataStore.post.findMany();
+
+    const uniqueAuthorIds = Array.from(new Set((allPosts as any[]).map(p => (p.author as any)?.id).filter((id): id is string => Boolean(id) && id !== userId)));
+    const statusEntries = await Promise.all(
+      uniqueAuthorIds.map(async (id) => [id, await dataStore.relationships.getStatus(userId, id)] as const)
+    );
+    const statusMap = new Map(statusEntries);
 
     // Filter posts based on privacy and snooze/block relationships
     const filteredPosts = [];
-    for (const post of allPosts) {
-      if (!post.author) continue;
+    for (const p of (allPosts as any[])) {
+      if (!p.author) continue;
+      const authorId: string = (p.author as any).id;
 
       // Check relationship status
-      const status = await dataStore.relationships.getStatus(user.id, post.author.id);
+      const status = authorId === userId ? { isSelf: true, isBlocked: false, isSnoozed: false, friendStatus: "ACCEPTED" } : (statusMap.get(authorId) || { isBlocked: false, isSnoozed: false, friendStatus: null });
       if (status.isBlocked || status.isSnoozed) continue;
 
       // Check privacy settings
-      if (post.privacy === "ONLY_ME" && post.author.id !== user.id) continue;
-      if (post.privacy === "FRIENDS" && post.author.id !== user.id && status.friendStatus !== "ACCEPTED") continue;
-      if (post.privacy === "FRIENDS_EXCEPT" && post.author.id !== user.id) {
-        if (post.privacyExceptions?.includes(user.id) || status.friendStatus !== "ACCEPTED") continue;
+      if (p.privacy === "ONLY_ME" && authorId !== userId) continue;
+      if (p.privacy === "FRIENDS" && authorId !== userId && status.friendStatus !== "ACCEPTED") continue;
+      if (p.privacy === "FRIENDS_EXCEPT" && authorId !== userId) {
+        if (p.privacyExceptions?.includes(userId) || status.friendStatus !== "ACCEPTED") continue;
       }
 
-      filteredPosts.push(post);
+      filteredPosts.push(p);
     }
 
     return NextResponse.json(filteredPosts, { status: 200 });
