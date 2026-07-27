@@ -3,10 +3,11 @@ import type { ReactNode } from "react";
 import "./globals.css";
 import { Providers } from "./providers";
 import { Navbar } from "@/components/Navbar";
+import { MessengerPopup } from "@/components/MessengerPopup";
 
 export const metadata: Metadata = {
-  title: "Reddit Clone - Cinematic UI",
-  description: "Advanced Reddit Clone with Cinematic UI Design",
+  title: "SocialPulse - Next-Gen Social Network",
+  description: "Full-Featured Facebook & Reddit Social Media Platform with Cinematic UI",
 };
 
 export default function RootLayout({
@@ -20,6 +21,7 @@ export default function RootLayout({
         <Providers>
           <Navbar />
           {children}
+          <MessengerPopup />
         </Providers>
       </body>
     </html>

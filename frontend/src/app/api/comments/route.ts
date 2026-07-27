@@ -42,10 +42,13 @@ export async function POST(req: Request) {
     const body = await req.json();
     const postId = typeof body.postId === "string" ? body.postId : "";
     const content = typeof body.content === "string" ? body.content.trim() : "";
+    const parentId = typeof body.parentId === "string" ? body.parentId : undefined;
+    const mediaUrl = typeof body.mediaUrl === "string" ? body.mediaUrl : undefined;
+    const gifUrl = typeof body.gifUrl === "string" ? body.gifUrl : undefined;
 
-    if (!postId || !content) {
+    if (!postId && (!content && !mediaUrl && !gifUrl)) {
       return NextResponse.json(
-        { error: "Post id and comment text are required" },
+        { error: "Post id and content/media are required" },
         { status: 400 }
       );
     }
@@ -53,8 +56,11 @@ export async function POST(req: Request) {
     const comment = await dataStore.comment.create({
       data: {
         postId,
-        content,
+        content: content || (gifUrl ? "GIF Attachment" : "Media Attachment"),
         authorId: user.id,
+        parentId,
+        mediaUrl,
+        gifUrl
       },
     });
 

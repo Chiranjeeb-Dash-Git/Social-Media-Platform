@@ -6,7 +6,9 @@ const nextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
-  turbopack: {},
+  turbopack: {
+    root: path.resolve(__dirname, '../'),
+  },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
       ...config.resolve.alias,
