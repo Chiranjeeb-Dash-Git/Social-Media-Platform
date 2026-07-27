@@ -70,6 +70,34 @@ export function MessengerPopup() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
+  useEffect(() => {
+    const handleOpenChat = async (e: any) => {
+      const { targetUserId } = e.detail || {};
+      setIsOpen(true);
+      if (!targetUserId || !user || !token) return;
+      const existing = conversations.find(c => !c.isGroup && c.participants.some(p => p.id === targetUserId));
+      if (existing) {
+        setActiveConv(existing);
+      } else {
+        try {
+          const res = await axios.post("/api/messages", {
+            action: "create_conversation",
+            isGroup: false,
+            participantIds: [targetUserId]
+          }, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          queryClient.invalidateQueries(["messenger_convs", user.id]);
+          setActiveConv(res.data);
+        } catch (err) {
+          console.error("Could not open chat conversation", err);
+        }
+      }
+    };
+    window.addEventListener("open-chat-with", handleOpenChat);
+    return () => window.removeEventListener("open-chat-with", handleOpenChat);
+  }, [conversations, user, token, queryClient]);
+
   const sendMutation = useMutation(
     async (payload: { content?: string; voiceNoteUrl?: string }) => {
       if (!token || !activeConv || !user) throw new Error("Unauthorized");

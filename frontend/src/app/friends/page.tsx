@@ -4,7 +4,7 @@ import { useState } from "react";
 import axios from "axios";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import Link from "next/link";
-import { Users, UserPlus, UserCheck, UserX, Check, Shield, Plus, Trash2, Search, Heart } from "lucide-react";
+import { Users, UserPlus, UserCheck, UserX, Check, Shield, Plus, Trash2, Search, Heart, MessageCircle } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/contexts/AuthContext";
@@ -39,6 +39,30 @@ export default function FriendCenterPage() {
     }
   });
 
+  const { data: realFriends = [] } = useQuery({
+    queryKey: ["my_real_friends", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const res = await axios.get<UserBasic[]>("/api/users/relationships?type=friends", {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
+      return res.data;
+    },
+    enabled: Boolean(user)
+  });
+
+  const { data: pendingRequests = [] } = useQuery({
+    queryKey: ["my_pending_requests", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const res = await axios.get<any[]>("/api/users/relationships?type=pending", {
+        headers: token ? { Authorization: `Bearer ${token}` } : undefined
+      });
+      return res.data;
+    },
+    enabled: Boolean(user)
+  });
+
   const { data: customLists = [] } = useQuery({
     queryKey: ["custom_lists"],
     queryFn: async () => {
@@ -51,9 +75,9 @@ export default function FriendCenterPage() {
   });
 
   const relMutation = useMutation(
-    async ({ action, targetId }: { action: string; targetId: string }) => {
+    async ({ action, targetId, requestId, status }: { action: string; targetId?: string; requestId?: string; status?: string }) => {
       if (!token) throw new Error("Unauthorized");
-      const res = await axios.post("/api/users/relationships", { action, targetId }, {
+      const res = await axios.post("/api/users/relationships", { action, targetId, requestId, status: status || "ACCEPTED" }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
@@ -61,7 +85,9 @@ export default function FriendCenterPage() {
     {
       onSuccess: (_, variables) => {
         queryClient.invalidateQueries(["all_users_sample"]);
-        toast.success(variables.action === "respond" ? "Friend request accepted!" : "Action completed!");
+        queryClient.invalidateQueries(["my_real_friends"]);
+        queryClient.invalidateQueries(["my_pending_requests"]);
+        toast.success(variables.action === "respond" ? "Friend request accepted!" : variables.action === "unfriend" ? "Unfriended user." : "Friend request sent!");
       }
     }
   );
@@ -85,6 +111,9 @@ export default function FriendCenterPage() {
 
   const otherUsers = users.filter(u => u.id !== user?.id);
   const filteredUsers = otherUsers.filter(u => u.username.toLowerCase().includes(searchQuery.toLowerCase()));
+  const friendIdSet = new Set(realFriends.map(f => f.id));
+  const pendingSenderMap = new Map(pendingRequests.map(r => [r.user?.id, r.requestId]));
+  const suggestions = filteredUsers.filter(u => !friendIdSet.has(u.id) && !pendingSenderMap.has(u.id));
 
   return (
     <div className="min-h-screen bg-muted/15 py-6">
@@ -122,7 +151,7 @@ export default function FriendCenterPage() {
             }`}
           >
             <UserPlus className="h-4 w-4" />
-            <span>Friend Requests (2)</span>
+            <span>Friend Requests ({pendingRequests.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("SUGGESTIONS")}
@@ -131,7 +160,7 @@ export default function FriendCenterPage() {
             }`}
           >
             <Users className="h-4 w-4" />
-            <span>People You May Know</span>
+            <span>People You May Know ({suggestions.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("FRIENDS")}
@@ -140,7 +169,7 @@ export default function FriendCenterPage() {
             }`}
           >
             <UserCheck className="h-4 w-4" />
-            <span>All Friends</span>
+            <span>All Friends ({realFriends.length})</span>
           </button>
           <button
             onClick={() => setActiveTab("LISTS")}
@@ -158,34 +187,45 @@ export default function FriendCenterPage() {
           <div className="bg-card rounded-3xl border p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-extrabold text-foreground border-b pb-3">Pending Friend Requests</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
-              {filteredUsers.slice(0, 2).map(u => (
-                <div key={u.id} className="bg-muted/30 rounded-2xl border p-4 flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
-                  <div className="flex items-center gap-3">
-                    <Avatar src={u.image} alt={u.username} size="md" />
-                    <div>
-                      <Link href={`/u/${u.username}`} className="font-extrabold text-sm hover:underline text-foreground">{u.username}</Link>
-                      <p className="text-[10px] text-muted-foreground">14 mutual friends</p>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      size="sm"
-                      onClick={() => relMutation.mutate({ action: "respond", targetId: u.id })}
-                      className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
-                    >
-                      <Check className="mr-1 h-3.5 w-3.5" /> Confirm
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => toast.success("Request removed")}
-                      className="flex-1 rounded-xl font-bold text-xs"
-                    >
-                      Delete
-                    </Button>
-                  </div>
+              {pendingRequests.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-sm text-muted-foreground font-semibold">
+                  No pending friend requests.
                 </div>
-              ))}
+              ) : (
+                pendingRequests.map(req => {
+                  const u = req.user || {};
+                  return (
+                    <div key={req.requestId} className="bg-muted/30 rounded-2xl border p-4 flex flex-col justify-between space-y-4 hover:shadow-md transition-all">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={u.image} alt={u.username} size="md" />
+                        <div>
+                          <Link href={`/u/${u.username}`} className="font-extrabold text-sm hover:underline text-foreground">{u.username}</Link>
+                          <p className="text-[10px] text-muted-foreground">Wants to be friends</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          size="sm"
+                          onClick={() => relMutation.mutate({ action: "respond", requestId: req.requestId, status: "ACCEPTED" })}
+                          disabled={relMutation.isLoading}
+                          className="flex-1 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
+                        >
+                          <Check className="mr-1 h-3.5 w-3.5" /> Confirm
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => relMutation.mutate({ action: "respond", requestId: req.requestId, status: "REJECTED" })}
+                          disabled={relMutation.isLoading}
+                          className="flex-1 rounded-xl font-bold text-xs hover:text-red-500"
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </div>
         )}
@@ -195,22 +235,29 @@ export default function FriendCenterPage() {
           <div className="bg-card rounded-3xl border p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-extrabold text-foreground border-b pb-3">People You May Know</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredUsers.map(u => (
-                <div key={u.id} className="bg-muted/20 rounded-2xl border p-4 flex flex-col items-center text-center space-y-3 hover:shadow-md transition-all">
-                  <Avatar src={u.image} alt={u.username} size="lg" />
-                  <div>
-                    <Link href={`/u/${u.username}`} className="font-extrabold text-sm hover:underline text-foreground block">{u.username}</Link>
-                    <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{u.bio || "Active Platform Member"}</p>
-                  </div>
-                  <Button
-                    size="sm"
-                    onClick={() => relMutation.mutate({ action: "request", targetId: u.id })}
-                    className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
-                  >
-                    <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add Friend
-                  </Button>
+              {suggestions.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-sm text-muted-foreground font-semibold">
+                  No new suggestions available right now.
                 </div>
-              ))}
+              ) : (
+                suggestions.map(u => (
+                  <div key={u.id} className="bg-muted/20 rounded-2xl border p-4 flex flex-col items-center text-center space-y-3 hover:shadow-md transition-all">
+                    <Avatar src={u.image} alt={u.username} size="lg" />
+                    <div>
+                      <Link href={`/u/${u.username}`} className="font-extrabold text-sm hover:underline text-foreground block">{u.username}</Link>
+                      <p className="text-[10px] text-muted-foreground line-clamp-1 mt-0.5">{u.bio || "Active Platform Member"}</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      onClick={() => relMutation.mutate({ action: "request", targetId: u.id })}
+                      disabled={relMutation.isLoading}
+                      className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs"
+                    >
+                      <UserPlus className="mr-1.5 h-3.5 w-3.5" /> Add Friend
+                    </Button>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         )}
@@ -220,25 +267,40 @@ export default function FriendCenterPage() {
           <div className="bg-card rounded-3xl border p-6 shadow-sm space-y-4">
             <h2 className="text-lg font-extrabold text-foreground border-b pb-3">Your Friends List</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {filteredUsers.slice(0, 8).map(u => (
-                <div key={u.id} className="flex items-center justify-between p-3 rounded-2xl border bg-muted/20 hover:bg-muted transition-colors">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Avatar src={u.image} alt={u.username} size="md" />
-                    <div className="min-w-0">
-                      <Link href={`/u/${u.username}`} className="font-extrabold text-sm truncate block hover:underline">{u.username}</Link>
-                      <p className="text-[10px] text-muted-foreground">Connected • {u.karma || 120} Karma</p>
+              {realFriends.length === 0 ? (
+                <div className="col-span-full text-center py-12 text-sm text-muted-foreground font-semibold">
+                  No friends added yet. Discover people in Suggestions!
+                </div>
+              ) : (
+                realFriends.map(u => (
+                  <div key={u.id} className="flex items-center justify-between p-3 rounded-2xl border bg-muted/20 hover:bg-muted transition-colors">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <Avatar src={u.image} alt={u.username} size="md" />
+                      <div className="min-w-0">
+                        <Link href={`/u/${u.username}`} className="font-extrabold text-sm truncate block hover:underline">{u.username}</Link>
+                        <p className="text-[10px] text-muted-foreground">Connected • {u.karma || 120} Karma</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Button
+                        size="sm"
+                        onClick={() => window.dispatchEvent(new CustomEvent("open-chat-with", { detail: { targetUserId: u.id, targetUsername: u.username, targetImage: u.image } }))}
+                        className="rounded-xl text-xs font-bold px-3 bg-blue-600 hover:bg-blue-700 text-white"
+                      >
+                        <MessageCircle className="h-3.5 w-3.5 mr-1" /> Chat
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => { if (confirm(`Unfriend ${u.username}?`)) relMutation.mutate({ action: "unfriend", targetId: u.id }); }}
+                        className="rounded-xl text-xs font-bold px-2.5 text-muted-foreground hover:text-red-500"
+                      >
+                        <UserX className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   </div>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => { if (confirm(`Unfriend ${u.username}?`)) toast.success(`Unfriended ${u.username}`); }}
-                    className="rounded-xl text-xs font-bold px-3 text-muted-foreground hover:text-red-500"
-                  >
-                    <UserX className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </div>
         )}

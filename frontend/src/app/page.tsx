@@ -14,6 +14,7 @@ import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { PostCard, type Post } from "@/components/PostCard";
 import { CreatePostDialog } from "@/components/CreatePostDialog";
+import { AddFriendsModal } from "@/components/AddFriendsModal";
 
 type Community = {
   id: string;
@@ -27,7 +28,19 @@ export default function HomePage() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [showCreatePost, setShowCreatePost] = useState(false);
+  const [showAddFriendsModal, setShowAddFriendsModal] = useState(false);
   const [feedTab, setFeedTab] = useState<"ALL" | "FRIENDS" | "LIVE">("ALL");
+
+  const { data: activeFriends = [] } = useQuery({
+    queryKey: ["my_real_friends", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const response = await axios.get("/api/users/relationships?type=friends");
+      return response.data;
+    },
+    enabled: Boolean(user),
+    refetchInterval: 15000,
+  });
 
   useEffect(() => {
     setSearchQuery(new URLSearchParams(window.location.search).get("q") ?? "");
@@ -309,32 +322,60 @@ export default function HomePage() {
 
             {/* Active Contacts / Friends */}
             <div className="bg-card rounded-3xl border p-4 shadow-sm space-y-3">
-              <h4 className="font-extrabold text-xs uppercase tracking-wider text-muted-foreground flex items-center justify-between">
-                <span>Active Friends</span>
-                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-              </h4>
-              <div className="space-y-1.5">
-                {[
-                  { name: "Sarah Jenkins", status: "Active now", color: "bg-green-500" },
-                  { name: "Alex Rivera", status: "Active 5m ago", color: "bg-green-500" },
-                  { name: "David Chen", status: "In a live stream", color: "bg-red-500 animate-pulse" },
-                  { name: "Emma Watson", status: "Active 2h ago", color: "bg-gray-400" },
-                ].map((c, i) => (
-                  <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/80 cursor-pointer transition-colors">
-                    <div className="relative">
-                      <Avatar src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${c.name}`} alt={c.name} size="sm" />
-                      <span className={`absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-background ${c.color}`} />
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-xs truncate">{c.name}</p>
-                      <p className="text-[9px] text-muted-foreground truncate">{c.status}</p>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                  <span>Active Friends</span>
+                  {activeFriends.length > 0 && <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />}
+                </h4>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setShowAddFriendsModal(true)}
+                  className="h-6 px-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-500/10 hover:bg-blue-500/20 rounded-lg"
+                >
+                  <Plus className="h-3 w-3 mr-1" /> Add Friends
+                </Button>
               </div>
-              <p className="text-[10px] text-center text-muted-foreground pt-1">
-                Click the bottom-right dock to message!
-              </p>
+              <div className="space-y-1.5">
+                {activeFriends.length === 0 ? (
+                  <div className="text-center py-6 px-2 bg-muted/20 rounded-2xl border border-dashed space-y-2">
+                    <Users className="h-6 w-6 text-muted-foreground/60 mx-auto" />
+                    <p className="text-xs font-bold text-foreground">No friends connected</p>
+                    <p className="text-[10px] text-muted-foreground leading-relaxed">
+                      Add friends to see their active status, share posts, and chat!
+                    </p>
+                    <Button
+                      size="sm"
+                      onClick={() => setShowAddFriendsModal(true)}
+                      className="w-full rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-xs mt-1"
+                    >
+                      Find New Friends
+                    </Button>
+                  </div>
+                ) : (
+                  activeFriends.map((c: any) => (
+                    <div
+                      key={c.id}
+                      onClick={() => window.dispatchEvent(new CustomEvent("open-chat-with", { detail: { targetUserId: c.id, targetUsername: c.username, targetImage: c.image } }))}
+                      className="flex items-center gap-3 p-2 rounded-xl hover:bg-muted/80 cursor-pointer transition-colors"
+                    >
+                      <div className="relative">
+                        <Avatar src={c.image || `https://api.dicebear.com/7.x/avataaars/svg?seed=${c.username}`} alt={c.username} size="sm" />
+                        <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full ring-2 ring-background bg-green-500 animate-pulse" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-xs truncate">{c.username}</p>
+                        <p className="text-[9px] text-muted-foreground truncate">Online • Click to chat</p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+              {activeFriends.length > 0 && (
+                <p className="text-[10px] text-center text-muted-foreground pt-1">
+                  Click any friend to message in chat box!
+                </p>
+              )}
             </div>
 
             {/* Footer Copyright */}
@@ -354,6 +395,9 @@ export default function HomePage() {
 
       {showCreatePost && (
         <CreatePostDialog onClose={() => setShowCreatePost(false)} />
+      )}
+      {showAddFriendsModal && (
+        <AddFriendsModal onClose={() => setShowAddFriendsModal(false)} />
       )}
     </main>
   );
