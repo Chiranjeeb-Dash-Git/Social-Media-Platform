@@ -50,34 +50,38 @@ export default function FriendCenterPage() {
     enabled: Boolean(token)
   });
 
-  const relMutation = useMutation({
-    mutationFn: async ({ action, targetId }: { action: string; targetId: string }) => {
-      if (!token) return;
+  const relMutation = useMutation(
+    async ({ action, targetId }: { action: string; targetId: string }) => {
+      if (!token) throw new Error("Unauthorized");
       const res = await axios.post("/api/users/relationships", { action, targetId }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
     },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries(["all_users_sample"]);
-      toast.success(variables.action === "respond" ? "Friend request accepted!" : "Action completed!");
+    {
+      onSuccess: (_, variables) => {
+        queryClient.invalidateQueries(["all_users_sample"]);
+        toast.success(variables.action === "respond" ? "Friend request accepted!" : "Action completed!");
+      }
     }
-  });
+  );
 
-  const createListMutation = useMutation({
-    mutationFn: async (name: string) => {
-      if (!token) return;
+  const createListMutation = useMutation(
+    async (name: string) => {
+      if (!token) throw new Error("Unauthorized");
       const res = await axios.post("/api/users/lists", { name, memberIds: [] }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
     },
-    onSuccess: () => {
-      setNewListName("");
-      queryClient.invalidateQueries(["custom_lists"]);
-      toast.success("Custom Privacy List created!");
+    {
+      onSuccess: () => {
+        setNewListName("");
+        queryClient.invalidateQueries(["custom_lists"]);
+        toast.success("Custom Privacy List created!");
+      }
     }
-  });
+  );
 
   const otherUsers = users.filter(u => u.id !== user?.id);
   const filteredUsers = otherUsers.filter(u => u.username.toLowerCase().includes(searchQuery.toLowerCase()));

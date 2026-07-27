@@ -34,20 +34,24 @@ export default function ModerationDashboardPage() {
     }
   });
 
-  const moderateMutation = useMutation({
-    mutationFn: async ({ reportId, status }: { reportId: string; status: "RESOLVED" | "DISMISSED" }) => {
-      if (!token) return;
+  const moderateMutation = useMutation(
+    async ({ reportId, status }: { reportId: string; status: "RESOLVED" | "DISMISSED" }) => {
+      if (!token) throw new Error("Unauthorized");
       const res = await axios.patch("/api/reports", { reportId, status }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       return res.data;
     },
-    onSuccess: (_, variables) => {
-      refetch();
-      toast.success(variables.status === "RESOLVED" ? "Content actioned & removed!" : "Report dismissed.");
-    },
-    onError: () => toast.error("Action failed")
-  });
+    {
+      onSuccess: (_, variables) => {
+        refetch();
+        toast.success(variables.status === "RESOLVED" ? "Content actioned & removed!" : "Report dismissed.");
+      },
+      onError: () => {
+        toast.error("Action failed");
+      }
+    }
+  );
 
   const handleBanUser = async (targetId: string) => {
     if (!confirm("Are you sure you want to ban this user from the platform?")) return;

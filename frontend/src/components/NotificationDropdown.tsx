@@ -52,17 +52,19 @@ export function NotificationDropdown() {
     refetchInterval: 15000,
   });
 
-  const markReadMutation = useMutation({
-    mutationFn: async (id?: string) => {
-      if (!token) return;
+  const markReadMutation = useMutation(
+    async (id?: string) => {
+      if (!token) throw new Error("Unauthorized");
       await axios.patch("/api/notifications", { id, markAll: !id }, {
         headers: { Authorization: `Bearer ${token}` }
       });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries(["notifications", user?.id]);
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["notifications", user?.id]);
+      }
     }
-  });
+  );
 
   const handleNotificationClick = (notif: Notification) => {
     if (!notif.isRead) {
@@ -105,7 +107,7 @@ export function NotificationDropdown() {
             <button
               onClick={(e) => {
                 e.stopPropagation();
-                markReadMutation.mutate();
+                markReadMutation.mutate(undefined);
                 toast.success("All marked as read");
               }}
               className="text-xs font-medium text-primary hover:underline flex items-center gap-1"

@@ -72,9 +72,9 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
     enabled: Boolean(data?.user?.id)
   });
 
-  const updateProfileMutation = useMutation({
-    mutationFn: async () => {
-      if (!token) return;
+  const updateProfileMutation = useMutation(
+    async () => {
+      if (!token) throw new Error("Unauthorized");
       const res = await axios.patch("/api/users/profile", {
         bio,
         employment,
@@ -87,18 +87,22 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
       });
       return res.data;
     },
-    onSuccess: () => {
-      setIsEditingProfile(false);
-      refetch();
-      queryClient.invalidateQueries(["user_profile_detail", username]);
-      toast.success("Profile updated!");
-    },
-    onError: () => toast.error("Failed to update profile")
-  });
+    {
+      onSuccess: () => {
+        setIsEditingProfile(false);
+        refetch();
+        queryClient.invalidateQueries(["user_profile_detail", username]);
+        toast.success("Profile updated!");
+      },
+      onError: () => {
+        toast.error("Failed to update profile");
+      }
+    }
+  );
 
-  const relationshipMutation = useMutation({
-    mutationFn: async (payload: { action: string; targetId?: string; requestId?: string; status?: string }) => {
-      if (!token || !data?.user) return;
+  const relationshipMutation = useMutation(
+    async (payload: { action: string; targetId?: string; requestId?: string; status?: string }) => {
+      if (!token || !data?.user) throw new Error("Unauthorized");
       const res = await axios.post("/api/users/relationships", {
         ...payload,
         targetId: data.user.id
@@ -107,11 +111,13 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
       });
       return res.data;
     },
-    onSuccess: () => {
-      refetch();
-      toast.success("Relationship updated");
+    {
+      onSuccess: () => {
+        refetch();
+        toast.success("Relationship updated");
+      }
     }
-  });
+  );
 
   if (isLoading) {
     return (

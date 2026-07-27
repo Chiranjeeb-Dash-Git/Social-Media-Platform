@@ -70,9 +70,9 @@ export function MessengerPopup() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  const sendMutation = useMutation({
-    mutationFn: async (payload: { content?: string; voiceNoteUrl?: string }) => {
-      if (!token || !activeConv || !user) return;
+  const sendMutation = useMutation(
+    async (payload: { content?: string; voiceNoteUrl?: string }) => {
+      if (!token || !activeConv || !user) throw new Error("Unauthorized");
       const res = await axios.post("/api/messages", {
         action: "send_message",
         conversationId: activeConv.id,
@@ -83,17 +83,19 @@ export function MessengerPopup() {
       });
       return res.data;
     },
-    onSuccess: () => {
-      setInputMsg("");
-      queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
-      queryClient.invalidateQueries(["messenger_convs", user?.id]);
-      // Simulate reply typing
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-      }, 2500);
+    {
+      onSuccess: () => {
+        setInputMsg("");
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        queryClient.invalidateQueries(["messenger_convs", user?.id]);
+        // Simulate reply typing
+        setIsTyping(true);
+        setTimeout(() => {
+          setIsTyping(false);
+        }, 2500);
+      }
     }
-  });
+  );
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();

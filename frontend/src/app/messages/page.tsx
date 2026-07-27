@@ -59,9 +59,9 @@ export default function FullMessengerPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [activeConv?.messages]);
 
-  const sendMutation = useMutation({
-    mutationFn: async ({ text, isVoice }: { text: string; isVoice?: boolean }) => {
-      if (!token || !activeConvId) return;
+  const sendMutation = useMutation(
+    async ({ text, isVoice }: { text: string; isVoice?: boolean }) => {
+      if (!token || !activeConvId) throw new Error("Unauthorized");
       const res = await axios.post("/api/messages", {
         conversationId: activeConvId,
         content: text,
@@ -71,16 +71,20 @@ export default function FullMessengerPage() {
       });
       return res.data;
     },
-    onSuccess: () => {
-      setContent("");
-      queryClient.invalidateQueries(["messenger_conversations"]);
-      setIsTyping(true);
-      setTimeout(() => {
-        setIsTyping(false);
-      }, 3000);
-    },
-    onError: () => toast.error("Failed to send message")
-  });
+    {
+      onSuccess: () => {
+        setContent("");
+        queryClient.invalidateQueries(["messenger_conversations"]);
+        setIsTyping(true);
+        setTimeout(() => {
+          setIsTyping(false);
+        }, 3000);
+      },
+      onError: () => {
+        toast.error("Failed to send message");
+      }
+    }
+  );
 
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
