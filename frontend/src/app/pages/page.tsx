@@ -155,7 +155,7 @@ export default function PagesDiscoveryPage() {
                       <div>
                         <Link href={`/pages/${p.id}`} className="font-extrabold text-base text-foreground group-hover:text-purple-600 transition-colors flex items-center gap-1.5">
                           <span>{p.name}</span>
-                          <ShieldCheck className="h-4 w-4 text-purple-500 flex-shrink-0" title="Verified Page" />
+                          <span title="Verified Page"><ShieldCheck className="h-4 w-4 text-purple-500 flex-shrink-0" /></span>
                         </Link>
                         <p className="text-xs text-muted-foreground line-clamp-2 mt-1 font-normal">{p.description || "Official Creator Page"}</p>
                       </div>

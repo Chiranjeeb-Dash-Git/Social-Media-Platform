@@ -81,7 +81,7 @@ export function PageDetailClient({ pageId }: { pageId: string }) {
               <div className="mb-2">
                 <h1 className="text-2xl sm:text-3xl font-black text-foreground flex items-center justify-center sm:justify-start gap-2">
                   <span>{page.name}</span>
-                  <ShieldCheck className="h-6 w-6 text-purple-600 flex-shrink-0" title="Verified Creator Page" />
+                  <span title="Verified Creator Page"><ShieldCheck className="h-6 w-6 text-purple-600 flex-shrink-0" /></span>
                 </h1>
                 <p className="text-xs sm:text-sm font-semibold text-muted-foreground mt-1 max-w-xl">{page.description || "Official Creator Page & Watch Channel"}</p>
                 <p className="text-xs font-extrabold text-purple-600 mt-2 flex items-center justify-center sm:justify-start gap-1.5">
