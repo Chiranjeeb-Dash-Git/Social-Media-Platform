@@ -5,9 +5,9 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-  },
-  turbopack: {
-    root: path.resolve(__dirname, '../'),
+    turbo: {
+      root: path.resolve(__dirname, '../'),
+    },
   },
   webpack: (config, { isServer }) => {
     config.resolve.alias = {
