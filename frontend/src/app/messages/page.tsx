@@ -3,11 +3,12 @@
 import { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import { useQuery, useMutation, useQueryClient } from "react-query";
-import { MessageSquare, Send, Mic, Phone, Video, Info, Search, Circle, Smile, Image as ImageIcon, CheckCheck } from "lucide-react";
+import { MessageSquare, Send, Mic, Phone, Video, Info, Search, Circle, Smile, Image as ImageIcon, CheckCheck, FileText, X, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/Button";
 import { Avatar } from "@/components/ui/Avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
+import { MessengerMessageItem, Message } from "@/components/MessengerMessageItem";
 
 type Conversation = {
   id: string;
@@ -17,13 +18,12 @@ type Conversation = {
     username: string;
     image?: string;
   }[];
-  messages: {
+  lastMessage?: {
     id: string;
     senderId: string;
     content: string;
-    isVoiceNote?: boolean;
     createdAt: string;
-  }[];
+  };
 };
 
 export default function FullMessengerPage() {
@@ -32,9 +32,15 @@ export default function FullMessengerPage() {
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [content, setContent] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ url: string; name: string; type: string; size: number } | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<any>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const { data: conversations = [], isLoading } = useQuery({
     queryKey: ["messenger_conversations"],
@@ -55,17 +61,36 @@ export default function FullMessengerPage() {
   const activeConv = conversations.find(c => c.id === activeConvId) || conversations[0];
   const otherParticipant = activeConv?.participants.find(p => p.id !== user?.id) || activeConv?.participants[0];
 
+  const { data: messages = [], refetch: refetchMsgs } = useQuery({
+    queryKey: ["messenger_msgs", activeConv?.id],
+    queryFn: async () => {
+      if (!user || !token || !activeConv) return [];
+      const res = await axios.get<Message[]>(`/api/messages?conversationId=${activeConv.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      return res.data;
+    },
+    enabled: Boolean(user && token && activeConv),
+    refetchInterval: 3000,
+  });
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [activeConv?.messages]);
+  }, [messages]);
 
   const sendMutation = useMutation(
-    async ({ text, isVoice }: { text: string; isVoice?: boolean }) => {
+    async (payload: { text?: string; voiceNoteUrl?: string; fileUrl?: string; fileName?: string; fileType?: string; fileSize?: number; mediaUrl?: string }) => {
       if (!token || !activeConvId) throw new Error("Unauthorized");
       const res = await axios.post("/api/messages", {
+        action: "send_message",
         conversationId: activeConvId,
-        content: text,
-        isVoiceNote: isVoice || false
+        content: payload.text,
+        voiceNoteUrl: payload.voiceNoteUrl,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileType: payload.fileType,
+        fileSize: payload.fileSize,
+        mediaUrl: payload.mediaUrl
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -74,6 +99,8 @@ export default function FullMessengerPage() {
     {
       onSuccess: () => {
         setContent("");
+        setPendingFile(null);
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
         queryClient.invalidateQueries(["messenger_conversations"]);
         setIsTyping(true);
         setTimeout(() => {
@@ -86,20 +113,112 @@ export default function FullMessengerPage() {
     }
   );
 
+  const deleteMutation = useMutation(
+    async (messageId: string) => {
+      if (!token) throw new Error("Unauthorized");
+      const res = await axios.post("/api/messages", { action: "delete_message", messageId }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        toast.success("Message unsent");
+      }
+    }
+  );
+
+  const editMutation = useMutation(
+    async ({ messageId, content }: { messageId: string; content: string }) => {
+      if (!token) throw new Error("Unauthorized");
+      const res = await axios.post("/api/messages", { action: "edit_message", messageId, content }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        toast.success("Message edited");
+      }
+    }
+  );
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!content.trim()) return;
-    sendMutation.mutate({ text: content.trim() });
+    if (!content.trim() && !pendingFile) return;
+    sendMutation.mutate({
+      text: content.trim(),
+      fileUrl: pendingFile?.url,
+      fileName: pendingFile?.name,
+      fileType: pendingFile?.type,
+      fileSize: pendingFile?.size,
+      mediaUrl: pendingFile?.type.startsWith("image/") ? pendingFile.url : undefined
+    });
   };
 
-  const simulateVoiceNote = () => {
-    setIsRecording(true);
-    toast("Recording voice note...", { icon: "🎙️" });
-    setTimeout(() => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onloadend = () => {
+      setPendingFile({
+        url: reader.result as string,
+        name: file.name,
+        type: file.type || (file.name.endsWith(".pdf") ? "application/pdf" : file.name.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/octet-stream"),
+        size: file.size
+      });
+      toast.success(`Attached ${file.name} (100% Original Clarity)`);
+    };
+  };
+
+  const handleVoiceRecord = async () => {
+    if (isRecording) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
       setIsRecording(false);
-      sendMutation.mutate({ text: "🎙️ Voice Note (0:14s audio clip)", isVoice: true });
-      toast.success("Voice note sent!");
-    }, 2500);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            const base64AudioMessage = reader.result as string;
+            const durationStr = `${Math.floor(recordingTime / 60)}:${Math.floor(recordingTime % 60) < 10 ? "0" : ""}${Math.floor(recordingTime % 60)}`;
+            sendMutation.mutate({
+              voiceNoteUrl: base64AudioMessage,
+              text: `🎙️ Voice Note (${durationStr || "0:05"})`,
+              fileType: blob.type || "audio/webm",
+              fileSize: blob.size,
+              fileName: `VoiceNote-${Date.now()}.webm`
+            });
+            toast.success("Voice note sent!");
+          };
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        recorder.start();
+        setMediaRecorder(recorder);
+        setIsRecording(true);
+        setRecordingTime(0);
+        timerRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+        toast("Recording voice note...", { icon: "🎙️" });
+      } catch (err) {
+        console.error("Microphone error:", err);
+        toast.error("Microphone permission required for voice notes");
+      }
+    }
   };
 
   const filteredConvs = conversations.filter(c => {
@@ -139,7 +258,7 @@ export default function FullMessengerPage() {
           ) : (
             filteredConvs.map(conv => {
               const p = conv.participants.find(part => part.id !== user?.id) || conv.participants[0];
-              const lastMsg = conv.messages?.[conv.messages.length - 1];
+              const lastMsg = conv.lastMessage;
               const isActive = conv.id === activeConvId;
               return (
                 <div
@@ -212,23 +331,17 @@ export default function FullMessengerPage() {
                 </span>
               </div>
 
-              {activeConv.messages?.map((msg) => {
+              {messages.map((msg) => {
                 const isMe = msg.senderId === user?.id;
                 return (
-                  <div key={msg.id} className={`flex items-end gap-2.5 ${isMe ? "justify-end" : "justify-start"}`}>
-                    {!isMe && <Avatar src={otherParticipant?.image} alt={otherParticipant?.username || "user"} size="sm" />}
-                    <div className={`max-w-[75%] sm:max-w-md p-3.5 rounded-2xl text-sm shadow-sm ${
-                      isMe
-                        ? "bg-blue-600 text-white rounded-br-none font-medium"
-                        : "bg-card text-foreground border rounded-bl-none font-normal"
-                    }`}>
-                      <p className="whitespace-pre-wrap leading-relaxed">{msg.content}</p>
-                      <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isMe ? "text-blue-100" : "text-muted-foreground"}`}>
-                        <span>{new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-                        {isMe && <CheckCheck className="h-3 w-3 text-blue-200" />}
-                      </div>
-                    </div>
-                  </div>
+                  <MessengerMessageItem
+                    key={msg.id}
+                    msg={msg}
+                    isMe={isMe}
+                    otherParticipant={otherParticipant}
+                    onDelete={(id) => deleteMutation.mutate(id)}
+                    onEdit={(id, content) => editMutation.mutate({ messageId: id, content })}
+                  />
                 );
               })}
 
@@ -248,41 +361,70 @@ export default function FullMessengerPage() {
               <div ref={messagesEndRef} />
             </div>
 
+            {/* Hidden File Inputs */}
+            <input type="file" ref={photoInputRef} onChange={handleFileSelect} accept="image/*,.heic,.heif,.webp,.svg,.tiff,.bmp,.png,.jpg,.jpeg,.gif" className="hidden" />
+            <input type="file" ref={docInputRef} onChange={handleFileSelect} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,*/*" className="hidden" />
+
+            {/* Pending File Attachment Banner */}
+            {pendingFile && (
+              <div className="px-6 py-2 bg-muted/80 border-t flex items-center justify-between text-xs animate-in fade-in-50">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="font-extrabold text-blue-600">{pendingFile.type.startsWith("image/") ? "🖼️ Photo" : "📄 Doc"}:</span>
+                  <span className="truncate text-foreground font-semibold">{pendingFile.name}</span>
+                  <span className="text-[10px] bg-green-500/10 text-green-600 px-2 py-0.5 rounded font-black whitespace-nowrap">100% HD Original</span>
+                </div>
+                <button type="button" onClick={() => setPendingFile(null)} className="p-1 hover:text-red-500 shrink-0">
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            )}
+
             {/* Input Footer */}
             <footer className="p-3.5 bg-card border-t shadow-sm">
               <form onSubmit={handleSend} className="flex items-center gap-2 max-w-5xl mx-auto">
-                <button type="button" onClick={() => toast("Photo selection tool")} className="p-2 text-muted-foreground hover:text-blue-500 transition-colors">
+                <button
+                  type="button"
+                  onClick={() => photoInputRef.current?.click()}
+                  className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-muted rounded-full transition-colors"
+                  title="Send HD Photo / Image"
+                >
                   <ImageIcon className="h-5 w-5" />
                 </button>
-                <button type="button" onClick={() => toast("Sticker & Emoji picker")} className="p-2 text-muted-foreground hover:text-amber-500 transition-colors">
-                  <Smile className="h-5 w-5" />
+                <button
+                  type="button"
+                  onClick={() => docInputRef.current?.click()}
+                  className="p-2 text-muted-foreground hover:text-blue-600 hover:bg-muted rounded-full transition-colors"
+                  title="Send PDF / DOCX / Document"
+                >
+                  <FileText className="h-5 w-5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={handleVoiceRecord}
+                  className={`p-2 rounded-full transition-colors ${
+                    isRecording ? "bg-red-500 text-white animate-pulse" : "text-muted-foreground hover:bg-muted hover:text-blue-600"
+                  }`}
+                  title="Record Voice Note"
+                >
+                  <Mic className="h-5 w-5" />
                 </button>
                 
                 <input
                   type="text"
                   value={content}
                   onChange={e => setContent(e.target.value)}
-                  placeholder={`Message ${otherParticipant?.username || "friend"}...`}
-                  className="flex-1 bg-muted rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 border"
+                  disabled={isRecording}
+                  placeholder={isRecording ? `Recording voice note (${recordingTime}s)... Click mic again to stop & send` : `Message ${otherParticipant?.username || "friend"}...`}
+                  className="flex-1 bg-muted rounded-full px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 border min-w-0"
                 />
 
-                {content.trim() ? (
-                  <Button type="submit" disabled={sendMutation.isLoading} className="rounded-full h-10 w-10 p-0 bg-blue-600 hover:bg-blue-700 text-white shadow-md">
-                    <Send className="h-4 w-4" />
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    onClick={simulateVoiceNote}
-                    disabled={isRecording}
-                    className={`rounded-full h-10 w-10 p-0 shadow-md transition-all ${
-                      isRecording ? "bg-red-600 text-white animate-pulse" : "bg-muted text-muted-foreground hover:bg-blue-600 hover:text-white"
-                    }`}
-                    title="Send Voice Note"
-                  >
-                    <Mic className="h-4 w-4" />
-                  </Button>
-                )}
+                <Button
+                  type="submit"
+                  disabled={(!content.trim() && !pendingFile) && !isRecording}
+                  className="rounded-full h-10 w-10 p-0 bg-blue-600 hover:bg-blue-700 text-white shadow-md shrink-0 disabled:opacity-50"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
               </form>
             </footer>
           </>

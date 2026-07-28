@@ -246,6 +246,17 @@ const initSchema = async () => {
     );
   `);
 
+  // Safe Alter tables for messaging features (files, unsend, edit)
+  await pool.query(`
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_url TEXT;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_name TEXT;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_type TEXT;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_size BIGINT;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS is_edited BOOLEAN DEFAULT FALSE;
+    ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS edited_at TEXT;
+  `);
+
   // Seed basic communities if empty
   const { rowCount } = await pool.query("SELECT id FROM app_communities LIMIT 1");
   if (rowCount === 0) {
@@ -970,18 +981,25 @@ const dataStore = {
         content: row.content,
         mediaUrl: row.media_url || null,
         voiceNoteUrl: row.voice_note_url || null,
+        fileUrl: row.file_url || null,
+        fileName: row.file_name || null,
+        fileType: row.file_type || null,
+        fileSize: row.file_size ? Number(row.file_size) : null,
+        isDeleted: Boolean(row.is_deleted),
+        isEdited: Boolean(row.is_edited),
+        editedAt: row.edited_at || null,
         createdAt: row.created_at,
         reactions: typeof row.reactions === "string" ? JSON.parse(row.reactions) : (row.reactions || {}),
         sender: sendersMap.get(row.sender_id) || null
       }));
     },
-    sendMessage: async (data: { conversationId: string, senderId: string, content?: string, mediaUrl?: string, voiceNoteUrl?: string }) => {
+    sendMessage: async (data: { conversationId: string, senderId: string, content?: string, mediaUrl?: string, voiceNoteUrl?: string, fileUrl?: string, fileName?: string, fileType?: string, fileSize?: number }) => {
       await initSchema();
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       await pool.query(
-        "INSERT INTO app_messages (id, conversation_id, sender_id, content, media_url, voice_note_url, created_at, reactions) VALUES ($1, $2, $3, $4, $5, $6, $7, '{}')",
-        [id, data.conversationId, data.senderId, data.content || "", data.mediaUrl || null, data.voiceNoteUrl || null, createdAt]
+        "INSERT INTO app_messages (id, conversation_id, sender_id, content, media_url, voice_note_url, file_url, file_name, file_type, file_size, created_at, reactions, is_deleted, is_edited) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, '{}', false, false)",
+        [id, data.conversationId, data.senderId, data.content || "", data.mediaUrl || null, data.voiceNoteUrl || null, data.fileUrl || null, data.fileName || null, data.fileType || null, data.fileSize || null, createdAt]
       );
       
       // Update conversation timestamp
@@ -1009,10 +1027,40 @@ const dataStore = {
         content: data.content || "",
         mediaUrl: data.mediaUrl || null,
         voiceNoteUrl: data.voiceNoteUrl || null,
+        fileUrl: data.fileUrl || null,
+        fileName: data.fileName || null,
+        fileType: data.fileType || null,
+        fileSize: data.fileSize || null,
+        isDeleted: false,
+        isEdited: false,
+        editedAt: null,
         createdAt,
         reactions: {},
         sender: senderRes.rows[0] ? mapUser(senderRes.rows[0]) : null
       };
+    },
+    deleteMessage: async (messageId: string, userId: string) => {
+      await initSchema();
+      const check = await pool.query("SELECT * FROM app_messages WHERE id = $1 AND sender_id = $2", [messageId, userId]);
+      if (check.rows.length === 0) throw new Error("Unauthorized or message not found");
+      
+      const res = await pool.query(
+        "UPDATE app_messages SET is_deleted = TRUE, content = 'This message was deleted', media_url = NULL, voice_note_url = NULL, file_url = NULL WHERE id = $1 RETURNING *",
+        [messageId]
+      );
+      return res.rows[0];
+    },
+    editMessage: async (messageId: string, userId: string, newContent: string) => {
+      await initSchema();
+      const check = await pool.query("SELECT * FROM app_messages WHERE id = $1 AND sender_id = $2", [messageId, userId]);
+      if (check.rows.length === 0) throw new Error("Unauthorized or message not found");
+      
+      const editedAt = new Date().toISOString();
+      const res = await pool.query(
+        "UPDATE app_messages SET content = $1, is_edited = TRUE, edited_at = $2 WHERE id = $3 RETURNING *",
+        [newContent, editedAt, messageId]
+      );
+      return res.rows[0];
     },
     createConversation: async (data: { isGroup?: boolean, name?: string, participantIds: string[] }) => {
       await initSchema();

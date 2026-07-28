@@ -4,11 +4,12 @@ import { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { useQuery, useMutation, useQueryClient } from "react-query";
 import { formatDistanceToNow } from "date-fns";
-import { MessageCircle, X, Send, Mic, Smile, Users, ChevronLeft, Phone, Video, MoreVertical } from "lucide-react";
+import { MessageCircle, X, Send, Mic, Smile, Users, ChevronLeft, Phone, Video, MoreVertical, Image as ImageIcon, FileText, Trash2 } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
 import { Button } from "@/components/ui/Button";
 import { useAuth } from "@/contexts/AuthContext";
 import toast from "react-hot-toast";
+import { MessengerMessageItem, Message } from "@/components/MessengerMessageItem";
 
 type Conversation = {
   id: string;
@@ -19,17 +20,6 @@ type Conversation = {
   lastMessage?: { id: string; content: string; senderId: string; createdAt: string };
 };
 
-type Message = {
-  id: string;
-  conversationId: string;
-  senderId: string;
-  content: string;
-  mediaUrl?: string;
-  voiceNoteUrl?: string;
-  createdAt: string;
-  sender?: { id: string; username: string; image?: string };
-};
-
 export function MessengerPopup() {
   const { user, token } = useAuth();
   const queryClient = useQueryClient();
@@ -37,8 +27,14 @@ export function MessengerPopup() {
   const [activeConv, setActiveConv] = useState<Conversation | null>(null);
   const [inputMsg, setInputMsg] = useState("");
   const [isRecording, setIsRecording] = useState(false);
+  const [recordingTime, setRecordingTime] = useState(0);
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const [pendingFile, setPendingFile] = useState<{ url: string; name: string; type: string; size: number } | null>(null);
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const timerRef = useRef<any>(null);
+  const photoInputRef = useRef<HTMLInputElement>(null);
+  const docInputRef = useRef<HTMLInputElement>(null);
 
   const { data: conversations = [], refetch: refetchConvs } = useQuery({
     queryKey: ["messenger_convs", user?.id],
@@ -99,13 +95,18 @@ export function MessengerPopup() {
   }, [conversations, user, token, queryClient]);
 
   const sendMutation = useMutation(
-    async (payload: { content?: string; voiceNoteUrl?: string }) => {
+    async (payload: { content?: string; voiceNoteUrl?: string; fileUrl?: string; fileName?: string; fileType?: string; fileSize?: number; mediaUrl?: string }) => {
       if (!token || !activeConv || !user) throw new Error("Unauthorized");
       const res = await axios.post("/api/messages", {
         action: "send_message",
         conversationId: activeConv.id,
         content: payload.content,
-        voiceNoteUrl: payload.voiceNoteUrl
+        voiceNoteUrl: payload.voiceNoteUrl,
+        fileUrl: payload.fileUrl,
+        fileName: payload.fileName,
+        fileType: payload.fileType,
+        fileSize: payload.fileSize,
+        mediaUrl: payload.mediaUrl
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -114,9 +115,9 @@ export function MessengerPopup() {
     {
       onSuccess: () => {
         setInputMsg("");
+        setPendingFile(null);
         queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
         queryClient.invalidateQueries(["messenger_convs", user?.id]);
-        // Simulate reply typing
         setIsTyping(true);
         setTimeout(() => {
           setIsTyping(false);
@@ -125,20 +126,111 @@ export function MessengerPopup() {
     }
   );
 
+  const deleteMutation = useMutation(
+    async (messageId: string) => {
+      if (!token) throw new Error("Unauthorized");
+      const res = await axios.post("/api/messages", { action: "delete_message", messageId }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        toast.success("Message unsent");
+      }
+    }
+  );
+
+  const editMutation = useMutation(
+    async ({ messageId, content }: { messageId: string; content: string }) => {
+      if (!token) throw new Error("Unauthorized");
+      const res = await axios.post("/api/messages", { action: "edit_message", messageId, content }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        toast.success("Message edited");
+      }
+    }
+  );
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputMsg.trim()) return;
-    sendMutation.mutate({ content: inputMsg.trim() });
+    if (!inputMsg.trim() && !pendingFile) return;
+    sendMutation.mutate({
+      content: inputMsg.trim(),
+      fileUrl: pendingFile?.url,
+      fileName: pendingFile?.name,
+      fileType: pendingFile?.type,
+      fileSize: pendingFile?.size,
+      mediaUrl: pendingFile?.type.startsWith("image/") ? pendingFile.url : undefined
+    });
   };
 
-  const handleVoiceRecord = () => {
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onloadend = () => {
+      setPendingFile({
+        url: reader.result as string,
+        name: file.name,
+        type: file.type || (file.name.endsWith(".pdf") ? "application/pdf" : file.name.endsWith(".docx") ? "application/vnd.openxmlformats-officedocument.wordprocessingml.document" : "application/octet-stream"),
+        size: file.size
+      });
+      toast.success(`Attached ${file.name} (100% Original Clarity)`);
+    };
+  };
+
+  const handleVoiceRecord = async () => {
     if (isRecording) {
+      if (timerRef.current) clearInterval(timerRef.current);
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
       setIsRecording(false);
-      sendMutation.mutate({ voiceNoteUrl: "https://actions.google.com/sounds/v1/alarms/beep_short.ogg", content: "🎵 Voice Note (0:05)" });
-      toast.success("Voice note sent");
     } else {
-      setIsRecording(true);
-      toast("Recording voice note...", { icon: "🎙️" });
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream);
+        const chunks: Blob[] = [];
+
+        recorder.ondataavailable = (e) => {
+          if (e.data.size > 0) chunks.push(e.data);
+        };
+
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+          const reader = new FileReader();
+          reader.readAsDataURL(blob);
+          reader.onloadend = () => {
+            const base64AudioMessage = reader.result as string;
+            const durationStr = `${Math.floor(recordingTime / 60)}:${Math.floor(recordingTime % 60) < 10 ? "0" : ""}${Math.floor(recordingTime % 60)}`;
+            sendMutation.mutate({
+              voiceNoteUrl: base64AudioMessage,
+              content: `🎙️ Voice Note (${durationStr || "0:05"})`,
+              fileType: blob.type || "audio/webm",
+              fileSize: blob.size,
+              fileName: `VoiceNote-${Date.now()}.webm`
+            });
+            toast.success("Voice note sent!");
+          };
+          stream.getTracks().forEach(track => track.stop());
+        };
+
+        recorder.start();
+        setMediaRecorder(recorder);
+        setIsRecording(true);
+        setRecordingTime(0);
+        timerRef.current = setInterval(() => {
+          setRecordingTime(prev => prev + 1);
+        }, 1000);
+        toast("Recording voice note...", { icon: "🎙️" });
+      } catch (err) {
+        console.error("Microphone error:", err);
+        toast.error("Microphone permission required for voice notes");
+      }
     }
   };
 
@@ -237,23 +329,14 @@ export function MessengerPopup() {
                   messages.map(m => {
                     const isMe = m.senderId === user.id;
                     return (
-                      <div key={m.id} className={`flex flex-col ${isMe ? "items-end" : "items-start"}`}>
-                        <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
-                          isMe ? "bg-primary text-primary-foreground rounded-br-xs" : "bg-muted text-foreground rounded-bl-xs shadow-xs"
-                        }`}>
-                          {m.voiceNoteUrl ? (
-                            <div className="flex items-center gap-2">
-                              <Mic className="h-4 w-4 animate-bounce" />
-                              <span>{m.content}</span>
-                            </div>
-                          ) : (
-                            <p className="whitespace-pre-wrap leading-relaxed">{m.content}</p>
-                          )}
-                        </div>
-                        <span className="text-[9px] text-muted-foreground mt-0.5 px-1">
-                          {formatDistanceToNow(new Date(m.createdAt), { addSuffix: true })}
-                        </span>
-                      </div>
+                      <MessengerMessageItem
+                        key={m.id}
+                        msg={m}
+                        isMe={isMe}
+                        otherParticipant={activeConv.participants.find(p => p.id !== user.id)}
+                        onDelete={(id) => deleteMutation.mutate(id)}
+                        onEdit={(id, content) => editMutation.mutate({ messageId: id, content })}
+                      />
                     );
                   })
                 )}
@@ -269,13 +352,47 @@ export function MessengerPopup() {
             )}
           </div>
 
+          {/* Hidden File Inputs */}
+          <input type="file" ref={photoInputRef} onChange={handleFileSelect} accept="image/*,.heic,.heif,.webp,.svg,.tiff,.bmp,.png,.jpg,.jpeg,.gif" className="hidden" />
+          <input type="file" ref={docInputRef} onChange={handleFileSelect} accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv,.zip,.rar,.7z,*/*" className="hidden" />
+
+          {/* Pending File Attachment Banner */}
+          {pendingFile && (
+            <div className="px-3 py-1.5 bg-muted/80 border-t flex items-center justify-between text-xs animate-in fade-in-50">
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="font-extrabold text-blue-600">{pendingFile.type.startsWith("image/") ? "🖼️ Photo" : "📄 Doc"}:</span>
+                <span className="truncate text-foreground font-semibold">{pendingFile.name}</span>
+                <span className="text-[10px] bg-green-500/10 text-green-600 px-1.5 py-0.5 rounded font-black whitespace-nowrap">HD Original</span>
+              </div>
+              <button type="button" onClick={() => setPendingFile(null)} className="p-1 hover:text-red-500 shrink-0">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          )}
+
           {/* Footer / Input */}
           {activeConv && (
-            <form onSubmit={handleSend} className="p-2 border-t bg-background flex items-center gap-2">
+            <form onSubmit={handleSend} className="p-2 border-t bg-background flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => photoInputRef.current?.click()}
+                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-muted rounded-full transition-colors"
+                title="Send HD Photo / Image"
+              >
+                <ImageIcon className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => docInputRef.current?.click()}
+                className="p-1.5 text-muted-foreground hover:text-blue-600 hover:bg-muted rounded-full transition-colors"
+                title="Send PDF / DOCX / Document"
+              >
+                <FileText className="h-4 w-4" />
+              </button>
               <button
                 type="button"
                 onClick={handleVoiceRecord}
-                className={`p-2 rounded-full transition-colors ${
+                className={`p-1.5 rounded-full transition-colors ${
                   isRecording ? "bg-red-500 text-white animate-pulse" : "text-muted-foreground hover:bg-muted"
                 }`}
                 title="Record Voice Note"
@@ -284,16 +401,16 @@ export function MessengerPopup() {
               </button>
               <input
                 type="text"
-                placeholder={isRecording ? "Recording voice note..." : "Aa"}
+                placeholder={isRecording ? `Recording (${recordingTime}s)... Click mic to stop & send` : "Aa"}
                 value={inputMsg}
                 onChange={e => setInputMsg(e.target.value)}
                 disabled={isRecording}
-                className="flex-1 h-9 rounded-full bg-muted px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary"
+                className="flex-1 h-9 rounded-full bg-muted px-3 text-sm focus:outline-none focus:ring-1 focus:ring-primary min-w-0"
               />
               <button
                 type="submit"
-                disabled={!inputMsg.trim() && !isRecording}
-                className="p-2 bg-primary text-primary-foreground rounded-full disabled:opacity-50 hover:opacity-90 transition-opacity"
+                disabled={(!inputMsg.trim() && !pendingFile) && !isRecording}
+                className="p-2 bg-primary text-primary-foreground rounded-full disabled:opacity-50 hover:opacity-90 transition-opacity shrink-0"
               >
                 <Send className="h-4 w-4" />
               </button>

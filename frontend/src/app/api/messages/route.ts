@@ -33,7 +33,7 @@ export async function POST(req: Request) {
   try {
     const user = await getActor(req);
     const body = await req.json();
-    const { action, conversationId, content, mediaUrl, voiceNoteUrl, participantIds, isGroup, name } = body;
+    const { action, conversationId, content, mediaUrl, voiceNoteUrl, fileUrl, fileName, fileType, fileSize, participantIds, isGroup, name, messageId } = body;
 
     if (action === "create_conversation") {
       const conv = await dataStore.messenger.createConversation({
@@ -45,22 +45,42 @@ export async function POST(req: Request) {
     }
 
     if (action === "send_message") {
-      if (!conversationId || (!content && !mediaUrl && !voiceNoteUrl)) {
-        return NextResponse.json({ error: "Conversation ID and message content required" }, { status: 400 });
+      if (!conversationId || (!content && !mediaUrl && !voiceNoteUrl && !fileUrl)) {
+        return NextResponse.json({ error: "Conversation ID and message content or attachment required" }, { status: 400 });
       }
       const msg = await dataStore.messenger.sendMessage({
         conversationId,
         senderId: user.id,
         content,
         mediaUrl,
-        voiceNoteUrl
+        voiceNoteUrl,
+        fileUrl,
+        fileName,
+        fileType,
+        fileSize
       });
       return NextResponse.json(msg, { status: 201 });
     }
 
+    if (action === "delete_message" || action === "unsend_message") {
+      if (!messageId) {
+        return NextResponse.json({ error: "Message ID required" }, { status: 400 });
+      }
+      const msg = await dataStore.messenger.deleteMessage(messageId, user.id);
+      return NextResponse.json(msg, { status: 200 });
+    }
+
+    if (action === "edit_message") {
+      if (!messageId || content === undefined) {
+        return NextResponse.json({ error: "Message ID and content required" }, { status: 400 });
+      }
+      const msg = await dataStore.messenger.editMessage(messageId, user.id, content);
+      return NextResponse.json(msg, { status: 200 });
+    }
+
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error performing messenger action:", error);
-    return NextResponse.json({ error: "Could not perform messenger action" }, { status: 500 });
+    return NextResponse.json({ error: error.message || "Could not perform messenger action" }, { status: 500 });
   }
 }
