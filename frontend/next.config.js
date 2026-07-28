@@ -5,21 +5,13 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-    turbo: {
-      root: path.resolve(__dirname, '../'),
-    },
   },
-  webpack: (config, { isServer }) => {
-    config.resolve.alias = {
-      ...config.resolve.alias,
+  webpack: (config) => {
+    config.resolve.fallback = {
+      ...config.resolve.fallback,
+      'utf-8-validate': false,
+      'bufferutil': false,
     };
-    if (isServer) {
-      config.externals = config.externals || [];
-      config.externals.push({
-        'utf-8-validate': 'commonjs utf-8-validate',
-        'bufferutil': 'commonjs bufferutil',
-      });
-    }
     return config;
   },
 }
