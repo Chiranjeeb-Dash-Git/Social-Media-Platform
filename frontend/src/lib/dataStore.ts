@@ -204,6 +204,7 @@ const initSchema = async () => {
       id TEXT PRIMARY KEY,
       is_group BOOLEAN NOT NULL DEFAULT FALSE,
       name TEXT,
+      admin_id TEXT,
       created_at TEXT NOT NULL
     );
 
@@ -246,8 +247,9 @@ const initSchema = async () => {
     );
   `);
 
-  // Safe Alter tables for messaging features (files, unsend, edit)
+  // Safe Alter tables for messaging features (files, unsend, edit, admin)
   await pool.query(`
+    ALTER TABLE app_conversations ADD COLUMN IF NOT EXISTS admin_id TEXT;
     ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_url TEXT;
     ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_name TEXT;
     ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS file_type TEXT;
@@ -959,6 +961,7 @@ const dataStore = {
           id: row.id,
           isGroup: row.is_group,
           name: row.name,
+          adminId: row.admin_id || null,
           createdAt: row.created_at,
           participants: partsRes.rows.map(mapUser),
           lastMessage: lastMsgRes.rows[0] ? {
@@ -1041,12 +1044,18 @@ const dataStore = {
     },
     deleteMessage: async (messageId: string, userId: string) => {
       await initSchema();
-      const check = await pool.query("SELECT * FROM app_messages WHERE id = $1 AND sender_id = $2", [messageId, userId]);
-      if (check.rows.length === 0) throw new Error("Unauthorized or message not found");
+      const check = await pool.query("SELECT m.*, c.admin_id FROM app_messages m JOIN app_conversations c ON c.id = m.conversation_id WHERE m.id = $1", [messageId]);
+      if (check.rows.length === 0) throw new Error("Message not found");
+      const msg = check.rows[0];
+      if (msg.sender_id !== userId && msg.admin_id !== userId) {
+        throw new Error("Unauthorized: Only sender or group admin can delete this message");
+      }
+      const isByAdmin = msg.sender_id !== userId && msg.admin_id === userId;
+      const deletedText = isByAdmin ? "This message was deleted by Group Admin" : "This message was deleted";
       
       const res = await pool.query(
-        "UPDATE app_messages SET is_deleted = TRUE, content = 'This message was deleted', media_url = NULL, voice_note_url = NULL, file_url = NULL WHERE id = $1 RETURNING *",
-        [messageId]
+        "UPDATE app_messages SET is_deleted = TRUE, content = $1, media_url = NULL, voice_note_url = NULL, file_url = NULL WHERE id = $2 RETURNING *",
+        [deletedText, messageId]
       );
       return res.rows[0];
     },
@@ -1062,7 +1071,7 @@ const dataStore = {
       );
       return res.rows[0];
     },
-    createConversation: async (data: { isGroup?: boolean, name?: string, participantIds: string[] }) => {
+    createConversation: async (data: { isGroup?: boolean, name?: string, participantIds: string[], adminId?: string }) => {
       await initSchema();
       // If 1-on-1, check existing
       if (!data.isGroup && data.participantIds.length === 2) {
@@ -1082,7 +1091,8 @@ const dataStore = {
       
       const id = randomUUID();
       const createdAt = new Date().toISOString();
-      await pool.query("INSERT INTO app_conversations (id, is_group, name, created_at) VALUES ($1, $2, $3, $4)", [id, Boolean(data.isGroup), data.name || null, createdAt]);
+      const adminId = data.isGroup ? (data.adminId || data.participantIds[0]) : null;
+      await pool.query("INSERT INTO app_conversations (id, is_group, name, admin_id, created_at) VALUES ($1, $2, $3, $4, $5)", [id, Boolean(data.isGroup), data.name || null, adminId, createdAt]);
       
       for (const uid of data.participantIds) {
         await pool.query("INSERT INTO app_conversation_participants (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [id, uid]);
@@ -1090,6 +1100,38 @@ const dataStore = {
       
       const convs = await dataStore.messenger.getConversations(data.participantIds[0]);
       return convs.find(c => c.id === id);
+    },
+    updateGroup: async (conversationId: string, userId: string, data: { name?: string; addParticipantIds?: string[]; removeParticipantId?: string }) => {
+      await initSchema();
+      const check = await pool.query("SELECT * FROM app_conversations WHERE id = $1 AND is_group = TRUE", [conversationId]);
+      if (check.rows.length === 0) throw new Error("Group not found");
+      const conv = check.rows[0];
+      
+      if (!conv.admin_id) {
+        await pool.query("UPDATE app_conversations SET admin_id = $1 WHERE id = $2", [userId, conversationId]);
+        conv.admin_id = userId;
+      }
+
+      if (data.name !== undefined) {
+        if (conv.admin_id !== userId) throw new Error("Only admin can change group name");
+        await pool.query("UPDATE app_conversations SET name = $1 WHERE id = $2", [data.name, conversationId]);
+      }
+
+      if (data.addParticipantIds && data.addParticipantIds.length > 0) {
+        for (const uid of data.addParticipantIds) {
+          await pool.query("INSERT INTO app_conversation_participants (conversation_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING", [conversationId, uid]);
+        }
+      }
+
+      if (data.removeParticipantId) {
+        if (conv.admin_id !== userId && data.removeParticipantId !== userId) {
+          throw new Error("Only admin can remove members");
+        }
+        await pool.query("DELETE FROM app_conversation_participants WHERE conversation_id = $1 AND user_id = $2", [conversationId, data.removeParticipantId]);
+      }
+
+      const convs = await dataStore.messenger.getConversations(userId);
+      return convs.find(c => c.id === conversationId) || null;
     }
   },
 

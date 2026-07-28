@@ -15,6 +15,7 @@ type Conversation = {
   id: string;
   isGroup: boolean;
   name?: string;
+  adminId?: string;
   createdAt: string;
   participants: { id: string; username: string; image?: string }[];
   lastMessage?: { id: string; content: string; senderId: string; createdAt: string };
@@ -33,6 +34,7 @@ export function MessengerPopup() {
   const [isTyping, setIsTyping] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const timerRef = useRef<any>(null);
+  const recordingStartRef = useRef<number>(0);
   const photoInputRef = useRef<HTMLInputElement>(null);
   const docInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,12 +103,12 @@ export function MessengerPopup() {
         action: "send_message",
         conversationId: activeConv.id,
         content: payload.content,
+        mediaUrl: payload.mediaUrl,
         voiceNoteUrl: payload.voiceNoteUrl,
         fileUrl: payload.fileUrl,
         fileName: payload.fileName,
         fileType: payload.fileType,
-        fileSize: payload.fileSize,
-        mediaUrl: payload.mediaUrl
+        fileSize: payload.fileSize
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -117,11 +119,10 @@ export function MessengerPopup() {
         setInputMsg("");
         setPendingFile(null);
         queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
-        queryClient.invalidateQueries(["messenger_convs", user?.id]);
-        setIsTyping(true);
-        setTimeout(() => {
-          setIsTyping(false);
-        }, 2500);
+        queryClient.invalidateQueries(["messenger_convs"]);
+      },
+      onError: () => {
+        toast.error("Failed to send message");
       }
     }
   );
@@ -192,41 +193,65 @@ export function MessengerPopup() {
       setIsRecording(false);
     } else {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const recorder = new MediaRecorder(stream);
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            channelCount: 1
+          }
+        });
+
+        let mimeType = "audio/webm;codecs=opus";
+        if (typeof MediaRecorder.isTypeSupported === "function") {
+          if (!MediaRecorder.isTypeSupported(mimeType)) {
+            if (MediaRecorder.isTypeSupported("audio/webm")) mimeType = "audio/webm";
+            else if (MediaRecorder.isTypeSupported("audio/mp4")) mimeType = "audio/mp4";
+            else mimeType = "";
+          }
+        } else {
+          mimeType = "";
+        }
+
+        const options = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : undefined;
+        const recorder = new MediaRecorder(stream, options);
         const chunks: Blob[] = [];
 
         recorder.ondataavailable = (e) => {
-          if (e.data.size > 0) chunks.push(e.data);
+          if (e.data && e.data.size > 0) chunks.push(e.data);
         };
 
+        recordingStartRef.current = Date.now();
+
         recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: recorder.mimeType || "audio/webm" });
+          const elapsedSec = Math.max(1, Math.round((Date.now() - recordingStartRef.current) / 1000));
+          const durationStr = `${Math.floor(elapsedSec / 60)}:${Math.floor(elapsedSec % 60) < 10 ? "0" : ""}${Math.floor(elapsedSec % 60)}`;
+          const blobType = mimeType || recorder.mimeType || "audio/webm";
+          const blob = new Blob(chunks, { type: blobType });
           const reader = new FileReader();
           reader.readAsDataURL(blob);
           reader.onloadend = () => {
             const base64AudioMessage = reader.result as string;
-            const durationStr = `${Math.floor(recordingTime / 60)}:${Math.floor(recordingTime % 60) < 10 ? "0" : ""}${Math.floor(recordingTime % 60)}`;
             sendMutation.mutate({
               voiceNoteUrl: base64AudioMessage,
-              content: `🎙️ Voice Note (${durationStr || "0:05"})`,
-              fileType: blob.type || "audio/webm",
+              content: `🎙️ Voice Note (${durationStr})`,
+              fileType: blobType,
               fileSize: blob.size,
               fileName: `VoiceNote-${Date.now()}.webm`
             });
-            toast.success("Voice note sent!");
+            toast.success("Voice note sent loud & clear!");
           };
           stream.getTracks().forEach(track => track.stop());
         };
 
-        recorder.start();
+        recorder.start(250);
         setMediaRecorder(recorder);
         setIsRecording(true);
         setRecordingTime(0);
         timerRef.current = setInterval(() => {
           setRecordingTime(prev => prev + 1);
         }, 1000);
-        toast("Recording voice note...", { icon: "🎙️" });
+        toast("Recording voice note... Speak now!", { icon: "🎙️" });
       } catch (err) {
         console.error("Microphone error:", err);
         toast.error("Microphone permission required for voice notes");
@@ -262,9 +287,14 @@ export function MessengerPopup() {
                 </div>
               </div>
             ) : (
-              <div className="flex items-center gap-2">
-                <MessageCircle className="h-5 w-5" />
-                <h4 className="font-bold text-base">Messenger</h4>
+              <div className="flex items-center justify-between w-full pr-2">
+                <div className="flex items-center gap-2">
+                  <MessageCircle className="h-5 w-5" />
+                  <h4 className="font-bold text-base">Messenger</h4>
+                </div>
+                <a href="/messages" className="text-[11px] font-extrabold bg-primary-foreground/20 hover:bg-primary-foreground/30 text-white px-2 py-0.5 rounded-full transition-colors">
+                  + New Group / Chat
+                </a>
               </div>
             )}
             <div className="flex items-center gap-1">
@@ -279,7 +309,7 @@ export function MessengerPopup() {
                 </>
               )}
               <button onClick={() => setIsOpen(false)} className="p-1.5 hover:bg-primary-foreground/20 rounded-full">
-                <X className="h-4 w-4" />
+                <X className="h-5 w-5" />
               </button>
             </div>
           </div>
@@ -334,6 +364,7 @@ export function MessengerPopup() {
                         msg={m}
                         isMe={isMe}
                         otherParticipant={activeConv.participants.find(p => p.id !== user.id)}
+                        isAdmin={activeConv.adminId === user.id}
                         onDelete={(id) => deleteMutation.mutate(id)}
                         onEdit={(id, content) => editMutation.mutate({ messageId: id, content })}
                       />

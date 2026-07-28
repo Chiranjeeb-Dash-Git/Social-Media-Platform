@@ -24,24 +24,27 @@ export async function PATCH(req: Request, { params }: RouteContext) {
     const { postId } = await params;
     const user = await getAuthenticatedUser(req);
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "Please log in to edit this post" },
-        { status: 401 }
-      );
-    }
-
     const existingPost = await dataStore.post.findUnique({ where: { id: postId } });
 
     if (!existingPost) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (existingPost.author.id !== user.id) {
-      return NextResponse.json(
-        { error: "You can only edit your own posts" },
-        { status: 403 }
-      );
+    const isGuestPost = existingPost.author?.username?.toLowerCase() === "guest" || existingPost.author?.email === "guest@example.com";
+
+    if (!isGuestPost) {
+      if (!user) {
+        return NextResponse.json(
+          { error: "Please log in to edit this post" },
+          { status: 401 }
+        );
+      }
+      if (existingPost.author.id !== user.id && user.role !== "admin") {
+        return NextResponse.json(
+          { error: "You can only edit your own posts" },
+          { status: 403 }
+        );
+      }
     }
 
     const body = await req.json();
@@ -77,24 +80,27 @@ export async function DELETE(_req: Request, { params }: RouteContext) {
     const { postId } = await params;
     const user = await getAuthenticatedUser(_req);
 
-    if (!user) {
-      return NextResponse.json(
-        { error: "Please log in to delete this post" },
-        { status: 401 }
-      );
-    }
-
     const existingPost = await dataStore.post.findUnique({ where: { id: postId } });
 
     if (!existingPost) {
       return NextResponse.json({ error: "Post not found" }, { status: 404 });
     }
 
-    if (existingPost.author.id !== user.id) {
-      return NextResponse.json(
-        { error: "You can only delete your own posts" },
-        { status: 403 }
-      );
+    const isGuestPost = existingPost.author?.username?.toLowerCase() === "guest" || existingPost.author?.email === "guest@example.com";
+
+    if (!isGuestPost) {
+      if (!user) {
+        return NextResponse.json(
+          { error: "Please log in to delete this post" },
+          { status: 401 }
+        );
+      }
+      if (existingPost.author.id !== user.id && user.role !== "admin") {
+        return NextResponse.json(
+          { error: "You can only delete your own posts" },
+          { status: 403 }
+        );
+      }
     }
 
     const post = await dataStore.post.delete({ where: { id: postId } });

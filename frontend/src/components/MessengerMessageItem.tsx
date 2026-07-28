@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { formatDistanceToNow } from "date-fns";
 import { Mic, Play, Pause, Download, FileText, File, Check, CheckCheck, Trash2, Edit2, MoreVertical, X, ZoomIn, ExternalLink } from "lucide-react";
 import { Avatar } from "@/components/ui/Avatar";
@@ -38,15 +38,32 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
+  const [useNative, setUseNative] = useState(false);
+
+  // Extract fallback duration from text like "🎙️ Voice Note (0:15)"
+  useEffect(() => {
+    if (!duration || !isFinite(duration)) {
+      const match = content?.match(/\((\d+):(\d+)\)/);
+      if (match) {
+        const mins = parseInt(match[1], 10) || 0;
+        const secs = parseInt(match[2], 10) || 0;
+        if (mins * 60 + secs > 0) setDuration(mins * 60 + secs);
+      }
+    }
+  }, [content, duration]);
 
   const togglePlay = () => {
     if (!audioRef.current) return;
     if (isPlaying) {
       audioRef.current.pause();
     } else {
+      if (audioRef.current.ended || (duration > 0 && audioRef.current.currentTime >= duration - 0.2)) {
+        audioRef.current.currentTime = 0;
+      }
       audioRef.current.play().catch(err => {
         console.error("Audio playback error:", err);
-        toast.error("Could not play audio note");
+        setUseNative(true);
+        toast.error("Switched to native audio controls for compatibility");
       });
     }
   };
@@ -65,27 +82,34 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
     return `${m}:${s < 10 ? "0" : ""}${s}`;
   };
 
+  if (useNative) {
+    return (
+      <div className="bg-background/80 p-3 rounded-2xl border w-64 sm:w-80 shadow-xs flex flex-col gap-2">
+        <div className="flex items-center justify-between text-xs font-bold text-blue-600">
+          <span>🎙️ Live WhatsApp Voice Note</span>
+          <button onClick={() => setUseNative(false)} className="text-[10px] text-muted-foreground underline">Custom Player</button>
+        </div>
+        <audio src={url} controls controlsList="nodownload" className="w-full h-10" />
+      </div>
+    );
+  }
+
   return (
-    <div className="flex items-center gap-2.5 bg-background/60 p-3 rounded-2xl border w-64 sm:w-72 shadow-xs">
+    <div className="flex items-center gap-2.5 bg-background/80 p-3 rounded-2xl border w-64 sm:w-72 shadow-xs">
       <audio
         ref={audioRef}
         src={url}
+        preload="auto"
         onPlay={() => setIsPlaying(true)}
         onPause={() => setIsPlaying(false)}
-        onEnded={() => setIsPlaying(false)}
+        onEnded={() => {
+          setIsPlaying(false);
+          setCurrentTime(0);
+        }}
         onLoadedMetadata={(e) => {
           const d = e.currentTarget.duration;
-          if (d && isFinite(d) && !isNaN(d)) {
+          if (d && isFinite(d) && !isNaN(d) && d > 0) {
             setDuration(d);
-          } else {
-            // Workaround for WebM duration in browsers
-            e.currentTarget.currentTime = 1e101;
-            setTimeout(() => {
-              if (audioRef.current && isFinite(audioRef.current.duration)) {
-                setDuration(audioRef.current.duration);
-                audioRef.current.currentTime = 0;
-              }
-            }, 100);
           }
         }}
         onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
@@ -107,7 +131,12 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
             return (
               <div
                 key={idx}
-                className={`flex-1 rounded-full transition-all duration-150 ${
+                onClick={() => {
+                  if (audioRef.current && duration > 0) {
+                    audioRef.current.currentTime = (idx / 15) * duration;
+                  }
+                }}
+                className={`flex-1 rounded-full transition-all duration-150 cursor-pointer ${
                   isPassed ? "bg-blue-600 shadow-xs scale-y-110" : "bg-muted-foreground/30"
                 }`}
                 style={{ height: `${Math.max(4, isPlaying && isPassed ? (h * 1.3) % 22 : h)}px` }}
@@ -119,13 +148,23 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
           <span>
             {currentTime > 0 ? `${formatTime(currentTime)} / ${formatTime(duration)}` : (duration > 0 && isFinite(duration) ? formatTime(duration) : content || "HD Voice Note")}
           </span>
-          <button
-            type="button"
-            onClick={toggleSpeed}
-            className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 px-1.5 py-0.5 rounded font-black text-[9px] transition-colors"
-          >
-            {speed}x
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              onClick={() => setUseNative(true)}
+              className="text-[9px] text-muted-foreground hover:text-foreground underline px-1"
+              title="Use Native Controls if silent"
+            >
+              Audio
+            </button>
+            <button
+              type="button"
+              onClick={toggleSpeed}
+              className="bg-blue-500/10 hover:bg-blue-500/20 text-blue-600 px-1.5 py-0.5 rounded font-black text-[9px] transition-colors"
+            >
+              {speed}x
+            </button>
+          </div>
         </div>
       </div>
       <a
@@ -144,12 +183,14 @@ export function MessengerMessageItem({
   msg,
   isMe,
   otherParticipant,
+  isAdmin,
   onDelete,
   onEdit
 }: {
   msg: Message;
   isMe: boolean;
   otherParticipant?: { id: string; username: string; image?: string };
+  isAdmin?: boolean;
   onDelete?: (id: string) => void;
   onEdit?: (id: string, content: string) => void;
 }) {
@@ -177,7 +218,7 @@ export function MessengerMessageItem({
         {!isMe && <Avatar src={otherParticipant?.image} alt={otherParticipant?.username || "user"} size="sm" />}
         <div className="bg-muted/40 border border-dashed rounded-2xl px-3.5 py-2 text-xs italic text-muted-foreground flex items-center gap-2 shadow-xs">
           <span className="text-sm">🚫</span>
-          <span>{isMe ? "You deleted this message" : "This message was deleted"}</span>
+          <span>{msg.content || (isMe ? "You deleted this message" : "This message was deleted")}</span>
         </div>
       </div>
     );
@@ -195,9 +236,9 @@ export function MessengerMessageItem({
               ? "bg-blue-600 text-white rounded-br-none font-medium"
               : "bg-card text-foreground border rounded-bl-none font-normal"
           }`}>
-            {/* Options Menu Button (only for sender) */}
-            {isMe && !isEditing && (
-              <div className="absolute -left-8 top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity">
+            {/* Options Menu Button (for sender OR group admin) */}
+            {(isMe || isAdmin) && !isEditing && (
+              <div className={`absolute ${isMe ? "-left-8" : "-right-8"} top-1/2 -translate-y-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-20`}>
                 <button
                   type="button"
                   onClick={() => setShowMenu(!showMenu)}
@@ -207,8 +248,8 @@ export function MessengerMessageItem({
                   <MoreVertical className="h-4 w-4" />
                 </button>
                 {showMenu && (
-                  <div className="absolute right-0 bottom-full mb-1 w-40 bg-card border rounded-xl shadow-xl py-1 z-50 text-foreground text-xs font-semibold animate-in fade-in-50">
-                    {!msg.voiceNoteUrl && !isDoc && !isImage && (
+                  <div className={`absolute ${isMe ? "right-0" : "left-0"} bottom-full mb-1 w-44 bg-card border rounded-xl shadow-xl py-1 z-50 text-foreground text-xs font-semibold animate-in fade-in-50`}>
+                    {isMe && !msg.voiceNoteUrl && !isDoc && !isImage && (
                       <button
                         type="button"
                         onClick={() => { setIsEditing(true); setShowMenu(false); }}
@@ -222,7 +263,7 @@ export function MessengerMessageItem({
                       onClick={() => { if (onDelete) onDelete(msg.id); setShowMenu(false); }}
                       className="w-full text-left px-3 py-2 hover:bg-red-500/10 text-red-600 flex items-center gap-2 transition-colors"
                     >
-                      <Trash2 className="h-3.5 w-3.5" /> Unsend (for everyone)
+                      <Trash2 className="h-3.5 w-3.5" /> {isMe ? "Unsend (for everyone)" : "Delete as Admin"}
                     </button>
                   </div>
                 )}

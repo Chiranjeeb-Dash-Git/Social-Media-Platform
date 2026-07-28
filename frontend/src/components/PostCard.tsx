@@ -122,7 +122,8 @@ export function PostCard({ post }: PostCardProps) {
   const [pollState, setPollState] = useState<any>(post.pollData || null);
   const [votedOptionIdx, setVotedOptionIdx] = useState<number | null>(null);
 
-  const canManagePost = user?.id === displayPost.author?.id;
+  const isGuestAuthor = displayPost.author?.username?.toLowerCase() === "guest" || (displayPost.author as any)?.email === "guest@example.com";
+  const canManagePost = user?.id === displayPost.author?.id || isGuestAuthor || (user as any)?.role === "admin";
 
   const postUrl = useMemo(() => {
     if (typeof window === "undefined") return `/post/${post.id}`;

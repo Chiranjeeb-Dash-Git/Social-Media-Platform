@@ -39,9 +39,23 @@ export async function POST(req: Request) {
       const conv = await dataStore.messenger.createConversation({
         isGroup,
         name,
-        participantIds: Array.from(new Set([user.id, ...(participantIds || [])]))
+        participantIds: Array.from(new Set([user.id, ...(participantIds || [])])),
+        adminId: user.id
       });
       return NextResponse.json(conv, { status: 201 });
+    }
+
+    if (action === "update_group") {
+      if (!conversationId) {
+        return NextResponse.json({ error: "Conversation ID required" }, { status: 400 });
+      }
+      const { addParticipantIds, removeParticipantId } = body;
+      const conv = await dataStore.messenger.updateGroup(conversationId, user.id, {
+        name,
+        addParticipantIds,
+        removeParticipantId
+      });
+      return NextResponse.json(conv, { status: 200 });
     }
 
     if (action === "send_message") {
