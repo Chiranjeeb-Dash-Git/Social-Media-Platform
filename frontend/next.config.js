@@ -3,9 +3,12 @@ const path = require('path');
 
 const nextConfig = {
   reactStrictMode: true,
+  serverExternalPackages: ['pg', 'pg-native'],
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-    serverComponentsExternalPackages: ['pg', 'pg-native'],
+  },
+  turbopack: {
+    root: __dirname,
   },
   webpack: (config) => {
     config.resolve.fallback = {
