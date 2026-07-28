@@ -146,21 +146,36 @@ export default function HomePage() {
 
             {/* Popular Groups shortcut list */}
             <div className="bg-card rounded-3xl border p-4 shadow-sm space-y-3">
-              <h4 className="font-extrabold text-xs uppercase tracking-wider text-muted-foreground px-2">
-                Your Groups
-              </h4>
+              <div className="flex items-center justify-between px-2">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-muted-foreground">
+                  Your Groups
+                </h4>
+                <Link href="/messages?newGroup=true" className="text-[10px] font-black text-blue-600 hover:underline">
+                  + Create Group
+                </Link>
+              </div>
               <div className="space-y-1">
-                {communities.slice(0, 4).map((c) => (
-                  <Link key={c.id} href={`/r/${c.name}`} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted transition-colors">
-                    <div className="h-7 w-7 rounded-full bg-blue-500/20 text-blue-600 font-extrabold text-xs flex items-center justify-center">
-                      r/
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <p className="font-bold text-xs truncate">{c.name}</p>
-                      <p className="text-[10px] text-muted-foreground">{c.members || 1} members</p>
-                    </div>
-                  </Link>
-                ))}
+                {communities.length === 0 ? (
+                  <div className="p-3 text-center bg-muted/30 rounded-2xl border border-dashed">
+                    <p className="text-xs font-bold text-foreground">No groups created yet</p>
+                    <p className="text-[10px] text-muted-foreground mb-2">Connect with all platform members</p>
+                    <Link href="/messages?newGroup=true" className="inline-block bg-blue-600 hover:bg-blue-700 text-white text-[10px] font-extrabold px-3 py-1 rounded-lg shadow-xs transition-all">
+                      + Create Group with User IDs
+                    </Link>
+                  </div>
+                ) : (
+                  communities.slice(0, 4).map((c) => (
+                    <Link key={c.id} href={`/r/${c.name}`} className="flex items-center gap-2.5 p-2 rounded-xl hover:bg-muted transition-colors">
+                      <div className="h-7 w-7 rounded-full bg-blue-500/20 text-blue-600 font-extrabold text-xs flex items-center justify-center">
+                        #
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-bold text-xs truncate">{c.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{c.members || 1} members</p>
+                      </div>
+                    </Link>
+                  ))
+                )}
               </div>
             </div>
           </aside>

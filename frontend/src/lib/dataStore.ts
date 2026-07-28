@@ -259,22 +259,9 @@ const initSchema = async () => {
     ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS edited_at TEXT;
   `);
 
-  // Seed basic communities if empty
-  const { rowCount } = await pool.query("SELECT id FROM app_communities LIMIT 1");
-  if (rowCount === 0) {
-    const defaultCommunities = [
-      { id: "1", name: "programming", desc: "Talk about code, tools, and software engineering.", icon: "https://api.dicebear.com/7.x/initials/svg?seed=programming&backgroundColor=4f46e5" },
-      { id: "2", name: "nextjs", desc: "Server components, routing, data fetching, and Next.js apps.", icon: "https://api.dicebear.com/7.x/initials/svg?seed=nextjs&backgroundColor=000000" },
-      { id: "3", name: "webdev", desc: "Frontend, backend, design systems, and web product craft.", icon: "https://api.dicebear.com/7.x/initials/svg?seed=webdev&backgroundColor=059669" }
-    ];
-    
-    for (const c of defaultCommunities) {
-      await pool.query(
-        "INSERT INTO app_communities (id, name, description, created_at, icon) VALUES ($1, $2, $3, $4, $5) ON CONFLICT DO NOTHING",
-        [c.id, c.name, c.desc, new Date().toISOString(), c.icon]
-      );
-    }
-  }
+  // Purge any fake default communities as requested by user
+  await pool.query("DELETE FROM app_communities WHERE name IN ('programming', 'nextjs', 'webdev')");
+
 
   // Seed sample public Creator Page if empty
   const pagesCount = await pool.query("SELECT id FROM app_pages LIMIT 1");

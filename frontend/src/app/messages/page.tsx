@@ -94,6 +94,16 @@ export default function FullMessengerPage() {
   }, [activeConvId, conversations]);
 
   useEffect(() => {
+    if (typeof window !== "undefined" && window.location.search.includes("newGroup=true")) {
+      setNewChatType("GROUP");
+      setSelectedUserIds([]);
+      setGroupNameInput("");
+      setShowNewChatModal(true);
+    }
+  }, []);
+
+
+  useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
@@ -239,12 +249,7 @@ export default function FullMessengerPage() {
     } else {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: true,
-            noiseSuppression: true,
-            autoGainControl: true,
-            channelCount: 1
-          }
+          audio: true
         });
 
         let mimeType = "audio/webm;codecs=opus";
@@ -258,7 +263,7 @@ export default function FullMessengerPage() {
           mimeType = "";
         }
 
-        const options = mimeType ? { mimeType, audioBitsPerSecond: 128000 } : undefined;
+        const options = mimeType ? { mimeType } : undefined;
         const recorder = new MediaRecorder(stream, options);
         const chunks: Blob[] = [];
 
@@ -330,9 +335,9 @@ export default function FullMessengerPage() {
                   setGroupNameInput("");
                   setShowNewChatModal(true);
                 }}
-                className="bg-blue-600 hover:bg-blue-700 text-white text-[11px] font-extrabold px-2.5 py-1 rounded-xl shadow-sm flex items-center gap-1 transition-all"
+                className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-black px-3.5 py-1.5 rounded-xl shadow-md flex items-center gap-1.5 transition-all transform hover:scale-[1.02]"
               >
-                + Group / Chat
+                + Create Group Chat (with User IDs)
               </button>
             </div>
           </div>

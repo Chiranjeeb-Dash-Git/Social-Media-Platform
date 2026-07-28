@@ -38,7 +38,7 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
   const [duration, setDuration] = useState(0);
   const [currentTime, setCurrentTime] = useState(0);
   const [speed, setSpeed] = useState(1);
-  const [useNative, setUseNative] = useState(false);
+  const [useNative, setUseNative] = useState(true);
 
   // Extract fallback duration from text like "🎙️ Voice Note (0:15)"
   useEffect(() => {
