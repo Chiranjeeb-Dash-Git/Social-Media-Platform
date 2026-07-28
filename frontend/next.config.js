@@ -5,12 +5,14 @@ const nextConfig = {
   reactStrictMode: true,
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
+    serverComponentsExternalPackages: ['pg', 'pg-native'],
   },
   webpack: (config) => {
     config.resolve.fallback = {
       ...config.resolve.fallback,
       'utf-8-validate': false,
       'bufferutil': false,
+      'pg-native': false,
     };
     return config;
   },
