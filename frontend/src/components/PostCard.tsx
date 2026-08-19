@@ -90,11 +90,11 @@ const REACTIONS = [
 ];
 
 const BG_CARDS_MAP: Record<string, string> = {
-  "grad-blue": "bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
-  "grad-fire": "bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 text-white font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
-  "grad-purple": "bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-white font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
-  "grad-emerald": "bg-gradient-to-r from-emerald-600 to-teal-800 text-white font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
-  "dark-card": "bg-slate-900 border border-slate-700 text-amber-400 font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
+  "grad-blue": "bg-gradient-to-br from-[#dcefc5] via-[#b8d99f] to-[#4a8a5c] text-[#123b21] font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
+  "grad-fire": "bg-gradient-to-br from-[#f7f6d8] via-[#d8c774] to-[#4a8a5c] text-[#123b21] font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
+  "grad-purple": "bg-gradient-to-br from-[#eef8da] via-[#b9d5a5] to-[#2f7a4a] text-[#123b21] font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
+  "grad-emerald": "bg-gradient-to-br from-[#4a8a5c] to-[#123b21] text-[#eafbe4] font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
+  "dark-card": "bg-gradient-to-br from-[#e9f7dc] via-[#b8d99f] to-[#2f7a4a] text-[#123b21] font-extrabold text-xl sm:text-2xl p-10 text-center rounded-2xl shadow-inner",
 };
 
 export function PostCard({ post }: PostCardProps) {
@@ -302,7 +302,7 @@ export function PostCard({ post }: PostCardProps) {
     <motion.article
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      className="bg-card text-card-foreground rounded-3xl border shadow-md hover:shadow-xl transition-all duration-200 overflow-hidden mb-5"
+      className="verdant-post-card text-card-foreground rounded-3xl shadow-md transition-all duration-300 overflow-hidden mb-5"
     >
       {/* Live Video Banner */}
       {displayPost.isLive && (

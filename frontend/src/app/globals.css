@@ -74,14 +74,30 @@
   .verdant-card {
     background: rgba(255,255,255,.56); backdrop-filter: blur(14px);
     border: 1px solid rgba(18,59,33,.14); box-shadow: 0 8px 24px rgba(18,59,33,.07);
-    transition: transform .4s cubic-bezier(.2,.9,.3,1.1), box-shadow .4s;
+    transform-style: preserve-3d;
+    transition: transform .4s cubic-bezier(.2,.9,.3,1.1), box-shadow .4s, border-color .4s;
   }
-  .verdant-card:hover { transform: translateY(-3px); box-shadow: 0 18px 34px rgba(18,59,33,.14); }
+  .verdant-card:hover { transform: translateY(-3px) perspective(900px) rotateX(1deg); box-shadow: 0 18px 34px rgba(18,59,33,.14); border-color: rgba(18,59,33,.24); }
+  .verdant-post-card {
+    background: rgba(255,255,255,.68); backdrop-filter: blur(16px);
+    border: 1px solid rgba(18,59,33,.14); box-shadow: 0 10px 28px rgba(18,59,33,.08);
+    transform-style: preserve-3d;
+  }
+  .verdant-post-card:hover { box-shadow: 0 22px 42px rgba(18,59,33,.16); border-color: rgba(18,59,33,.25); }
+  .verdant-post-card button, .verdant-post-card a { transition: transform .25s cubic-bezier(.2,.9,.3,1.2), background-color .25s, color .25s, box-shadow .25s; }
+  .verdant-post-card button:hover, .verdant-post-card a:hover { transform: translateY(-2px); }
+  .verdant-action { transition: transform .25s cubic-bezier(.2,.9,.3,1.2), background-color .25s, box-shadow .25s; }
+  .verdant-action:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 8px 16px rgba(18,59,33,.1); }
+  .verdant-action:active { transform: scale(.97); }
   .verdant-pill { background: linear-gradient(135deg,#2f7a4a,#123b21); color: #eafbe4; box-shadow: 0 6px 14px rgba(18,59,33,.22); }
   .verdant-pill:hover { background: linear-gradient(135deg,#3c9459,#164a29); transform: translateY(-2px); }
   .verdant-story { background-size: cover; background-position: center; box-shadow: 0 8px 18px rgba(18,59,33,.15); transition: transform .4s, box-shadow .4s; }
   .verdant-story:hover { transform: translateY(-7px) rotateY(-5deg) scale(1.03); box-shadow: 0 18px 30px rgba(18,59,33,.28); }
   @keyframes verdantFloat { 0%,100% { transform: translate(0) scale(1); } 50% { transform: translate(25px,-35px) scale(1.08); } }
+
+  @media (min-width: 1280px) {
+    .verdant-layout { grid-template-columns: 280px minmax(0, 1fr) 330px; gap: 24px; padding-left: 32px; padding-right: 32px; }
+  }
 }
 
 @layer components {

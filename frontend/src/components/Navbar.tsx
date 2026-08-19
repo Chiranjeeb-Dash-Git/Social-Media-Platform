@@ -95,7 +95,7 @@ export function Navbar() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#123b21]/10 bg-[#fffdf5]/75 backdrop-blur-xl shadow-[0_4px_24px_rgba(18,59,33,.06)]">
-      <div className="container mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
+      <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         {/* Left: Logo & Search */}
         <div className="flex items-center gap-3 min-w-0 flex-1 max-w-sm">
           <Link href="/" className="flex items-center space-x-2 flex-shrink-0" aria-label="Home">

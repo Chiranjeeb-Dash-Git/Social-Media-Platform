@@ -29,11 +29,11 @@ const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
 
 const BG_CARDS = [
   { id: "none", label: "Normal", class: "" },
-  { id: "grad-blue", label: "Ocean", class: "bg-gradient-to-r from-blue-600 to-indigo-700 text-white font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
-  { id: "grad-fire", label: "Sunset", class: "bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 text-white font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
-  { id: "grad-purple", label: "Neon", class: "bg-gradient-to-r from-purple-600 via-pink-600 to-red-600 text-white font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
-  { id: "grad-emerald", label: "Forest", class: "bg-gradient-to-r from-emerald-600 to-teal-800 text-white font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
-  { id: "dark-card", label: "Midnight", class: "bg-slate-900 border border-slate-700 text-amber-400 font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
+  { id: "grad-blue", label: "Meadow", class: "bg-gradient-to-br from-[#dcefc5] via-[#b8d99f] to-[#4a8a5c] text-[#123b21] font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
+  { id: "grad-fire", label: "Sunset", class: "bg-gradient-to-br from-[#f7f6d8] via-[#d8c774] to-[#4a8a5c] text-[#123b21] font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
+  { id: "grad-purple", label: "Canopy", class: "bg-gradient-to-br from-[#eef8da] via-[#b9d5a5] to-[#2f7a4a] text-[#123b21] font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
+  { id: "grad-emerald", label: "Forest", class: "bg-gradient-to-br from-[#4a8a5c] to-[#123b21] text-[#eafbe4] font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
+  { id: "dark-card", label: "Moss", class: "bg-gradient-to-br from-[#e9f7dc] via-[#b8d99f] to-[#2f7a4a] text-[#123b21] font-extrabold text-xl p-8 text-center rounded-2xl shadow-inner" },
 ];
 
 const FEELINGS = [
