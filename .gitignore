@@ -44,3 +44,4 @@ dist/
 *.pem
 project-backups/
 start-webpage.cmd
+.ideavo/project
