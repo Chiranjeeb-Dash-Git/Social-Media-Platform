@@ -4,26 +4,26 @@
 
 @layer base {
   :root {
-    --background: 210 40% 98%;
-    --foreground: 222 47% 11%;
+    --background: 72 55% 95%;
+    --foreground: 140 42% 10%;
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 140 42% 10%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 18 100% 50%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 214 32% 91%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 214 32% 91%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 214 32% 91%;
-    --accent-foreground: 222 47% 11%;
+    --popover-foreground: 140 42% 10%;
+    --primary: 140 52% 25%;
+    --primary-foreground: 80 72% 95%;
+    --secondary: 86 53% 88%;
+    --secondary-foreground: 140 42% 10%;
+    --muted: 86 43% 90%;
+    --muted-foreground: 142 16% 35%;
+    --accent: 58 58% 87%;
+    --accent-foreground: 140 42% 10%;
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
-    --border: 214 32% 84%;
-    --input: 214 32% 84%;
-    --ring: 18 100% 50%;
-    --radius: 0.5rem;
+    --border: 140 28% 82%;
+    --input: 140 28% 82%;
+    --ring: 140 52% 25%;
+    --radius: 1rem;
   }
 
   .dark {
@@ -53,9 +53,35 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply text-foreground;
+    background:
+      radial-gradient(circle at 12% 8%, #fffdf5 0%, transparent 42%),
+      linear-gradient(135deg, #fffdf5 0%, #e9f7dc 35%, #eef8da 65%, #f7f6d8 100%);
+    background-attachment: fixed;
     font-feature-settings: "rlig" 1, "calt" 1;
   }
+}
+
+@layer components {
+  .verdant-page { position: relative; isolation: isolate; overflow: hidden; }
+  .verdant-page::before, .verdant-page::after {
+    content: ""; position: fixed; z-index: -1; pointer-events: none; border-radius: 999px;
+    filter: blur(70px); opacity: .28; background: #1c5632;
+    animation: verdantFloat 14s ease-in-out infinite;
+  }
+  .verdant-page::before { width: 420px; height: 420px; top: -120px; left: -100px; }
+  .verdant-page::after { width: 360px; height: 360px; right: -130px; bottom: -100px; animation-delay: 4s; background: #d8c774; }
+  .verdant-card {
+    background: rgba(255,255,255,.56); backdrop-filter: blur(14px);
+    border: 1px solid rgba(18,59,33,.14); box-shadow: 0 8px 24px rgba(18,59,33,.07);
+    transition: transform .4s cubic-bezier(.2,.9,.3,1.1), box-shadow .4s;
+  }
+  .verdant-card:hover { transform: translateY(-3px); box-shadow: 0 18px 34px rgba(18,59,33,.14); }
+  .verdant-pill { background: linear-gradient(135deg,#2f7a4a,#123b21); color: #eafbe4; box-shadow: 0 6px 14px rgba(18,59,33,.22); }
+  .verdant-pill:hover { background: linear-gradient(135deg,#3c9459,#164a29); transform: translateY(-2px); }
+  .verdant-story { background-size: cover; background-position: center; box-shadow: 0 8px 18px rgba(18,59,33,.15); transition: transform .4s, box-shadow .4s; }
+  .verdant-story:hover { transform: translateY(-7px) rotateY(-5deg) scale(1.03); box-shadow: 0 18px 30px rgba(18,59,33,.28); }
+  @keyframes verdantFloat { 0%,100% { transform: translate(0) scale(1); } 50% { transform: translate(25px,-35px) scale(1.08); } }
 }
 
 @layer components {

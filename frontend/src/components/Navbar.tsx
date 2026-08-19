@@ -94,16 +94,16 @@ export function Navbar() {
     }`;
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shadow-xs">
+    <header className="sticky top-0 z-50 w-full border-b border-[#123b21]/10 bg-[#fffdf5]/75 backdrop-blur-xl shadow-[0_4px_24px_rgba(18,59,33,.06)]">
       <div className="container mx-auto flex h-14 max-w-7xl items-center justify-between gap-3 px-4">
         {/* Left: Logo & Search */}
         <div className="flex items-center gap-3 min-w-0 flex-1 max-w-sm">
           <Link href="/" className="flex items-center space-x-2 flex-shrink-0" aria-label="Home">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-blue-600 shadow-md">
-              <span className="text-lg font-black text-white">f</span>
-            </div>
-            <span className="hidden font-extrabold text-gradient sm:inline-block tracking-tight text-base">
-              SocialPulse
+              <div className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#2f7a4a] to-[#123b21] shadow-md">
+                <span className="text-lg font-black text-[#eafbe4]">V</span>
+              </div>
+            <span className="hidden font-extrabold text-[#123b21] sm:inline-block tracking-tight text-base">
+              Verdant
             </span>
           </Link>
 
@@ -112,7 +112,7 @@ export function Navbar() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search SocialPulse..."
+                placeholder="Search Verdant..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => { if (searchQuery.trim()) setSearchQuery(searchQuery); }}
@@ -238,7 +238,7 @@ export function Navbar() {
 
           {user && <NotificationDropdown />}
 
-          <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-full px-3 sm:px-4 shadow-sm transition-all font-semibold text-xs sm:text-sm">
+          <Button asChild size="sm" className="bg-gradient-to-br from-[#2f7a4a] to-[#123b21] hover:from-[#3c9459] hover:to-[#164a29] text-white rounded-xl px-3 sm:px-4 shadow-sm transition-all font-semibold text-xs sm:text-sm">
             <Link href="/submit">
               <Plus className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Create</span>
