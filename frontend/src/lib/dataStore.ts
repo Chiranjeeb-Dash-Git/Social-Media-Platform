@@ -15,29 +15,41 @@ const getPostgresUrl = () => {
   return /^postgres(ql)?:\/\//i.test(url) ? url : null;
 };
 
-const connectionString = getPostgresUrl();
-
-if (!connectionString) {
-  throw new Error(
-    "DATABASE_URL or POSTGRES_URL environment variable is missing. Please set it in your .env file."
-  );
-}
-
 const shouldUsePostgresSsl = (url: string) => {
   if (process.env.POSTGRES_SSL === "false") return false;
   if (process.env.POSTGRES_SSL === "true") return true;
   return Boolean(process.env.VERCEL) || !/localhost|127\.0\.0\.1/i.test(url);
 };
 
-const pool = new Pool({
-  connectionString,
-  max: process.env.VERCEL ? 3 : 15,
-  idleTimeoutMillis: 10000,
-  connectionTimeoutMillis: 5000,
-  ssl: shouldUsePostgresSsl(connectionString)
-    ? { rejectUnauthorized: false }
-    : undefined,
-});
+let poolInstance: any = null;
+
+const getPool = () => {
+  const connectionString = getPostgresUrl();
+
+  if (!connectionString) {
+    throw new Error(
+      "DATABASE_URL or POSTGRES_URL environment variable is missing. Please set it in your .env file."
+    );
+  }
+
+  if (!poolInstance) {
+    poolInstance = new Pool({
+      connectionString,
+      max: process.env.VERCEL ? 3 : 15,
+      idleTimeoutMillis: 10000,
+      connectionTimeoutMillis: 5000,
+      ssl: shouldUsePostgresSsl(connectionString)
+        ? { rejectUnauthorized: false }
+        : undefined,
+    });
+  }
+
+  return poolInstance;
+};
+
+const pool = {
+  query: (...args: any[]) => getPool().query(...args),
+};
 
 let schemaInitialized = false;
 
