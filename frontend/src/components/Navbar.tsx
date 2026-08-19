@@ -89,18 +89,18 @@ export function Navbar() {
   const linkClass = (href: string) =>
     `flex items-center space-x-2 px-3 py-2 rounded-xl text-sm font-semibold transition-all ${
       pathname === href
-        ? "bg-primary/10 text-primary"
-        : "text-muted-foreground hover:bg-muted hover:text-foreground"
+        ? "bg-primary/10 text-primary dark:border dark:border-[#ff7a3d]/30 dark:bg-[#ff7a3d]/10 dark:text-[#ff7a3d] dark:shadow-[0_0_18px_rgba(255,122,61,.22)]"
+        : "text-muted-foreground hover:bg-muted hover:text-foreground dark:hover:bg-white/[0.06]"
     }`;
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-[#123b21]/10 bg-[#fffdf5]/75 shadow-[0_4px_24px_rgba(18,59,33,.06)] backdrop-blur-xl dark:border-white/[0.08] dark:bg-[#08090e]/75 dark:shadow-[0_12px_32px_rgba(0,0,0,.35)]">
-      <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
+      <div className="flex h-20 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8">
         {/* Left: Logo & Search */}
-        <div className="flex items-center gap-3 min-w-0 flex-1 max-w-sm">
+        <div className="flex min-w-0 flex-1 items-center gap-4 lg:max-w-[640px]">
           <Link href="/" className="flex items-center space-x-2 flex-shrink-0" aria-label="Home">
               <div className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#2f7a4a] to-[#123b21] shadow-md dark:from-[#3b6eff] dark:to-[#274ecf] dark:shadow-[0_0_22px_rgba(59,110,255,.55)]">
-                <span className="text-lg font-black text-[#eafbe4]">S</span>
+                <span className="text-lg font-black text-[#eafbe4]">f</span>
               </div>
             <span className="hidden bg-gradient-to-r from-[#123b21] to-[#2f7a4a] bg-clip-text text-base font-extrabold tracking-tight text-transparent dark:from-[#ff7a3d] dark:via-[#9b5cff] dark:to-[#3b6eff] sm:inline-block">
               SocialPulse
@@ -116,7 +116,7 @@ export function Navbar() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => { if (searchQuery.trim()) setSearchQuery(searchQuery); }}
-                className="h-9 w-full rounded-full border border-border bg-muted/70 py-1.5 pl-9 pr-8 text-xs transition-all duration-200 placeholder:text-muted-foreground focus:border-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 dark:bg-white/[0.04] dark:focus:bg-white/[0.06] sm:text-sm"
+                className="h-12 w-full rounded-[14px] border border-border bg-muted/70 py-2 pl-10 pr-8 text-xs transition-all duration-200 placeholder:text-muted-foreground focus:border-primary focus:bg-background focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-white/[0.08] dark:bg-white/[0.04] dark:focus:border-[#3b6eff]/60 dark:focus:bg-white/[0.06] dark:focus:ring-[#3b6eff]/15 sm:text-sm"
               />
               {isSearching ? (
                 <Loader2 className="absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 animate-spin text-muted-foreground" />
@@ -226,7 +226,7 @@ export function Navbar() {
             variant="ghost"
             size="sm"
             onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
-            className="h-9 w-9 rounded-full bg-muted/50 p-0 hover:bg-muted dark:border dark:border-white/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
+            className="h-11 w-11 rounded-full bg-muted/50 p-0 hover:bg-muted dark:border dark:border-white/[0.08] dark:bg-white/[0.05] dark:hover:bg-white/[0.1]"
             aria-label="Toggle theme"
           >
             {mounted && theme === "dark" ? (
@@ -238,7 +238,7 @@ export function Navbar() {
 
           {user && <NotificationDropdown />}
 
-          <Button asChild size="sm" className="rounded-xl bg-gradient-to-br from-[#2f7a4a] to-[#123b21] px-3 text-xs font-semibold text-white shadow-sm transition-all hover:from-[#3c9459] hover:to-[#164a29] dark:from-[#3b6eff] dark:to-[#274ecf] dark:shadow-[0_6px_18px_rgba(59,110,255,.35)] dark:hover:shadow-[0_12px_26px_rgba(59,110,255,.5)] sm:px-4 sm:text-sm">
+          <Button asChild size="sm" className="h-11 rounded-xl bg-gradient-to-br from-[#2f7a4a] to-[#123b21] px-3 text-xs font-bold text-white shadow-sm transition-all hover:from-[#3c9459] hover:to-[#164a29] dark:from-[#3b6eff] dark:to-[#274ecf] dark:shadow-[0_6px_18px_rgba(59,110,255,.35)] dark:hover:shadow-[0_12px_26px_rgba(59,110,255,.5)] sm:px-5 sm:text-sm">
             <Link href="/submit">
               <Plus className="h-4 w-4 mr-1" />
               <span className="hidden sm:inline">Create</span>
@@ -302,10 +302,10 @@ export function Navbar() {
             </DropdownMenu>
           ) : (
             <div className="flex items-center space-x-2">
-              <Button variant="ghost" asChild size="sm" className="rounded-full px-3">
+              <Button variant="ghost" asChild size="sm" className="h-11 rounded-xl border border-transparent px-4 dark:border-white/[0.08] dark:text-white dark:hover:bg-white/[0.06]">
                 <Link href="/login">Log in</Link>
               </Button>
-              <Button asChild size="sm" className="rounded-full bg-primary text-primary-foreground px-4 shadow-sm">
+              <Button asChild size="sm" className="h-11 rounded-xl bg-gradient-to-br from-[#ff7a3d] to-[#ff5722] px-5 text-white shadow-[0_8px_22px_rgba(255,87,34,.35)] hover:shadow-[0_14px_28px_rgba(255,87,34,.5)]">
                 <Link href="/register">Sign up</Link>
               </Button>
             </div>
