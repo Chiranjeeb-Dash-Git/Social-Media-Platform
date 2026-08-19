@@ -1,0 +1,44 @@
+{
+  "systemSetup": [],
+  "templateName": "custom",
+  "projectDependencies": [
+    {
+      "name": "Install Dependencies",
+      "command": "npm install"
+    }
+  ],
+  "codeChecks": [],
+  "buildSteps": [
+    {
+      "name": "Build Project",
+      "command": "npm run build"
+    }
+  ],
+  "runStep": [
+    {
+      "name": "Run Dev Server",
+      "command": "npm --prefix frontend run dev -- --hostname 0.0.0.0 --port 3000",
+      "port": "3000"
+    }
+  ],
+  "deploySteps": [],
+  "cleanupFiles": [
+    "node_modules",
+    "frontend/node_modules",
+    "backend/node_modules",
+    "frontend/.next",
+    "frontend/out",
+    "frontend/.env",
+    "frontend-dev.log",
+    "frontend-dev.err",
+    "frontend-start.log",
+    "frontend-start.err"
+  ],
+  "packageManager": "npm",
+  "envPaths": [
+    {
+      "name": "frontend",
+      "path": "frontend/.env"
+    }
+  ]
+}
