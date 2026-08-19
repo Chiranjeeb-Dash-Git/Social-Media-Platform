@@ -100,10 +100,10 @@ export function Navbar() {
         <div className="flex items-center gap-3 min-w-0 flex-1 max-w-sm">
           <Link href="/" className="flex items-center space-x-2 flex-shrink-0" aria-label="Home">
               <div className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#2f7a4a] to-[#123b21] shadow-md">
-                <span className="text-lg font-black text-[#eafbe4]">V</span>
+                <span className="text-lg font-black text-[#eafbe4]">S</span>
               </div>
             <span className="hidden font-extrabold text-[#123b21] sm:inline-block tracking-tight text-base">
-              Verdant
+              SocialPulse
             </span>
           </Link>
 
@@ -112,7 +112,7 @@ export function Navbar() {
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <input
                 type="text"
-                placeholder="Search Verdant..."
+                placeholder="Search SocialPulse..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 onFocus={() => { if (searchQuery.trim()) setSearchQuery(searchQuery); }}
