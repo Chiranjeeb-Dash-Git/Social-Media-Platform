@@ -111,8 +111,10 @@ export function CreatePostDialog({ onClose, onCreated }: CreatePostDialogProps) 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
 
+    // The database seeds a general feed, so posting never depends on the user
+    // creating a group first. The guard remains for a failed communities request.
     if (!selectedCommunity) {
-      toast.error("Choose a community or target feed first.");
+      toast.error("The general feed is unavailable. Please refresh and try again.");
       return;
     }
     if (!title.trim() && !content.trim()) {

@@ -262,6 +262,14 @@ const initSchema = async () => {
   // Purge any fake default communities as requested by user
   await pool.query("DELETE FROM app_communities WHERE name IN ('programming', 'nextjs', 'webdev')");
 
+  // Keep a destination available for the composer even before users create groups.
+  await pool.query(
+    `INSERT INTO app_communities (id, name, description, created_at, members, icon)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (id) DO NOTHING`,
+    ["socialpulse-general", "general", "The public SocialPulse feed.", new Date().toISOString(), 1, "🌿"]
+  );
+
 
   // Seed sample public Creator Page if empty
   const pagesCount = await pool.query("SELECT id FROM app_pages LIMIT 1");
