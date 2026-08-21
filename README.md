@@ -1,4 +1,4 @@
-# 🌐 Reddit Clone: Full-Stack Social Media Platform
+# 🌐 Social Media Platform
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)
 ![React](https://img.shields.io/badge/React-18-blue?style=for-the-badge&logo=react)
