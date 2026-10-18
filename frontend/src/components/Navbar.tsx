@@ -98,13 +98,12 @@ export function Navbar() {
       <div className="flex h-14 w-full items-center justify-between gap-3 px-4 sm:px-6 lg:px-8 dark:h-20">
         {/* Left: Logo & Search */}
         <div className="flex min-w-0 flex-1 items-center gap-3 dark:gap-4 lg:max-w-sm dark:lg:max-w-[640px]">
-          <Link href="/" className="flex items-center space-x-2 flex-shrink-0" aria-label="Home">
-              <div className="flex h-9 w-9 items-center justify-center rounded-[13px] bg-gradient-to-br from-[#2f7a4a] to-[#123b21] shadow-md dark:from-[#3b6eff] dark:to-[#274ecf] dark:shadow-[0_0_22px_rgba(59,110,255,.55)]">
-                <span className="text-lg font-black text-[#eafbe4] dark:hidden">S</span><span className="hidden text-lg font-black text-[#eafbe4] dark:inline">f</span>
-              </div>
-            <span className="hidden bg-gradient-to-r from-[#123b21] to-[#2f7a4a] bg-clip-text text-base font-extrabold tracking-tight text-transparent dark:from-[#ff7a3d] dark:via-[#9b5cff] dark:to-[#3b6eff] sm:inline-block">
-              SocialPulse
-            </span>
+          <Link href="/" className="flex min-w-0 flex-shrink-0 items-center" aria-label="SocialPulse home">
+            <img
+              src="/socialpulse-mark.svg"
+              alt="SocialPulse"
+              className="h-10 w-[9.5rem] max-w-[38vw] object-contain object-left transition-transform duration-300 hover:scale-[1.03] dark:h-14 dark:w-[11rem]"
+            />
           </Link>
 
           <div className="relative flex-1 min-w-0" ref={searchRef}>
