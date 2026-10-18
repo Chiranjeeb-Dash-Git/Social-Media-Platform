@@ -84,7 +84,7 @@ export default function FullMessengerPage() {
       return res.data;
     },
     enabled: Boolean(token && activeConvId),
-    refetchInterval: 3000
+    refetchInterval: 1500
   });
 
   useEffect(() => {
@@ -337,10 +337,10 @@ export default function FullMessengerPage() {
   });
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-background flex flex-col md:flex-row border-t">
+    <div className="min-h-[calc(100vh-4rem)] min-w-0 overflow-hidden bg-background flex flex-col md:flex-row border-t">
       
       {/* Left Sidebar: Conversations List */}
-      <aside className="w-full md:w-80 lg:w-96 border-r bg-card flex flex-col h-[400px] md:h-[calc(100vh-4rem)]">
+      <aside className="w-full min-w-0 md:w-80 lg:w-96 border-r bg-card flex flex-col min-h-0 h-[400px] md:h-[calc(100vh-4rem)]">
         <div className="p-4 border-b space-y-3">
           <div className="flex items-center justify-between">
             <h2 className="text-xl font-black text-gradient flex items-center gap-2">
@@ -374,7 +374,7 @@ export default function FullMessengerPage() {
           </div>
         </div>
 
-        <div className="flex-1 overflow-y-auto divide-y">
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain divide-y">
           {isLoading ? (
             <div className="p-8 text-center text-xs text-muted-foreground">Loading chats...</div>
           ) : filteredConvs.length === 0 ? (
@@ -428,7 +428,7 @@ export default function FullMessengerPage() {
       </aside>
 
       {/* Right Area: Active Conversation Window */}
-      <main className="flex-1 flex flex-col bg-muted/10 h-[550px] md:h-[calc(100vh-4rem)]">
+      <main className="min-w-0 min-h-0 flex-1 flex flex-col overflow-hidden bg-muted/10 h-[550px] md:h-[calc(100vh-4rem)]">
         {activeConv ? (
           <>
             {/* Chat Window Header */}
@@ -505,7 +505,7 @@ export default function FullMessengerPage() {
             </header>
 
             {/* Messages Feed */}
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-4 sm:p-6 space-y-4">
               <div className="text-center my-4">
                 <span className="text-[11px] font-bold bg-muted text-muted-foreground px-3 py-1 rounded-full border">
                   Today • Encrypted Conversation

@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/Button";
 import { PostCard, type Post } from "@/components/PostCard";
 import { CreatePostDialog } from "@/components/CreatePostDialog";
 import { AddFriendsModal } from "@/components/AddFriendsModal";
+import { LandingPage } from "@/components/LandingPage";
 
 type Community = { id: string; name: string; members: number };
 type Story = { id: string; text: string; mediaUrl?: string | null; mediaType?: string | null; createdAt: string; expiresAt: string; author: { username: string; image?: string | null } };
@@ -65,6 +66,8 @@ export default function HomePage() {
   };
 
   const handleStoryMedia = (file: File) => { if (file.size > 4 * 1024 * 1024) return; const reader = new FileReader(); reader.onload = () => setStoryMedia({ url: String(reader.result), type: file.type }); reader.readAsDataURL(file); };
+
+  if (!user) return <LandingPage />;
 
   return (
     <main className="pulse-page min-h-screen pb-4">

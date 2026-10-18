@@ -233,12 +233,12 @@ export function MessengerMessageItem({
 
   return (
     <>
-      <div className={`flex items-end gap-2.5 my-1.5 group relative ${isMe ? "justify-end" : "justify-start"}`}>
+      <div className={`min-w-0 flex items-end gap-2.5 my-1.5 group relative ${isMe ? "justify-end" : "justify-start"}`}>
         {!isMe && <Avatar src={otherParticipant?.image} alt={otherParticipant?.username || "user"} size="sm" />}
         
-        <div className={`flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[85%] sm:max-w-md`}>
+        <div className={`min-w-0 max-w-full flex flex-col ${isMe ? "items-end" : "items-start"} max-w-[85%] sm:max-w-[min(42rem,85%)]`}>
           {/* Main Bubble */}
-          <div className={`relative p-3 rounded-2xl text-sm shadow-sm transition-all ${
+          <div className={`relative min-w-0 max-w-full overflow-hidden p-3 rounded-2xl text-sm shadow-sm transition-all ${
             isMe
               ? "bg-blue-600 text-white rounded-br-none font-medium"
               : "bg-card text-foreground border rounded-bl-none font-normal"
@@ -314,12 +314,12 @@ export function MessengerMessageItem({
                   <div className="space-y-1.5">
                     <div
                       onClick={() => setShowLightbox(true)}
-                      className="relative rounded-xl overflow-hidden cursor-pointer group/img border border-white/10 max-h-64 sm:max-h-80 bg-black/20"
+                      className="relative max-w-full rounded-xl overflow-hidden cursor-pointer group/img border border-white/10 max-h-64 sm:max-h-80 bg-black/20"
                     >
                       <img
                         src={msg.fileUrl || msg.mediaUrl}
                         alt={msg.fileName || "HD Photo"}
-                        className="w-full h-auto object-cover group-hover/img:scale-105 transition-transform duration-300"
+                        className="block max-h-64 sm:max-h-80 max-w-full h-auto object-contain group-hover/img:scale-105 transition-transform duration-300"
                       />
                       <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-md text-white text-[9px] font-black px-2 py-0.5 rounded-md border border-white/20 uppercase tracking-wider flex items-center gap-1">
                         <span>✨ Ultra HD Original</span>

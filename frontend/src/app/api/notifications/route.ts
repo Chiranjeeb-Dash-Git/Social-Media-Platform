@@ -7,12 +7,13 @@ const getActor = async (req: Request) => {
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
   const user = token ? await dataStore.auth.getUserFromToken(token) : null;
-  return user ?? dataStore.auth.getOrCreateGuestUser();
+  return user;
 };
 
 export async function GET(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const notifications = await dataStore.notification.findMany(user.id);
     const unreadCount = notifications.filter(n => !n.isRead).length;
     return NextResponse.json({ notifications, unreadCount }, { status: 200 });
@@ -25,6 +26,7 @@ export async function GET(req: Request) {
 export async function PATCH(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const body = await req.json();
     const { id, markAll } = body;
 

@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { Toaster } from "react-hot-toast";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { NotificationWatcher } from "@/components/NotificationWatcher";
 
 export function Providers({ children }: { children: ReactNode }) {
   const [queryClient] = useState(
@@ -30,6 +31,7 @@ export function Providers({ children }: { children: ReactNode }) {
       >
         <AuthProvider>
           {children}
+          <NotificationWatcher />
           <Toaster
             position="top-right"
             toastOptions={{

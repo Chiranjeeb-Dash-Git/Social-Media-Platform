@@ -61,7 +61,7 @@ export function MessengerPopup() {
       return res.data;
     },
     enabled: Boolean(user && token && activeConv),
-    refetchInterval: 3000,
+    refetchInterval: 1500,
   });
 
   useEffect(() => {
@@ -152,6 +152,22 @@ export function MessengerPopup() {
         queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
         toast.success("Message edited");
       }
+    }
+  );
+
+  const clearConversationMutation = useMutation(
+    async (_unused: boolean) => {
+      if (!token || !activeConv) throw new Error("Conversation is not selected");
+      const res = await axios.post("/api/messages", { action: "clear_conversation", conversationId: activeConv.id }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConv?.id]);
+        queryClient.invalidateQueries(["messenger_convs", user?.id]);
+        toast.success("Chat cleared");
+      },
+      onError: () => { toast.error("Could not clear this chat"); },
     }
   );
 
@@ -266,7 +282,7 @@ export function MessengerPopup() {
   return (
     <div className="fixed bottom-4 right-4 z-50 flex flex-col items-end">
       {isOpen ? (
-        <div className="w-80 sm:w-96 h-[500px] bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
+        <div className="w-[min(24rem,calc(100vw-1rem))] h-[min(38rem,calc(100vh-2rem))] min-h-0 bg-card border rounded-2xl shadow-2xl flex flex-col overflow-hidden animate-in slide-in-from-bottom-5 duration-200">
           {/* Header */}
           <div className="bg-primary px-4 py-3 text-primary-foreground flex items-center justify-between shadow-md">
             {activeConv ? (
@@ -302,6 +318,9 @@ export function MessengerPopup() {
             <div className="flex items-center gap-1">
               {activeConv && (
                 <>
+                  <button onClick={() => { if (window.confirm("Clear all messages in this chat? This cannot be undone.")) clearConversationMutation.mutate(true); }} disabled={clearConversationMutation.isLoading} className="p-1.5 hover:bg-red-500/30 rounded-full disabled:opacity-50" title="Clear chat history" aria-label="Clear chat history">
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                   <button onClick={() => toast.success("Calling...")} className="p-1.5 hover:bg-primary-foreground/20 rounded-full">
                     <Phone className="h-4 w-4" />
                   </button>
@@ -317,7 +336,7 @@ export function MessengerPopup() {
           </div>
 
           {/* Body */}
-          <div className="flex-1 overflow-y-auto bg-muted/20 p-3">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-muted/20 p-3">
             {!activeConv ? (
               <div className="space-y-1">
                 <div className="px-2 py-1 text-xs font-semibold text-muted-foreground uppercase">Recent Chats</div>
@@ -352,7 +371,7 @@ export function MessengerPopup() {
                 )}
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="min-w-0 space-y-3">
                 {messages.length === 0 ? (
                   <div className="text-center py-8 text-xs text-muted-foreground">
                     Start of conversation with {activeConv.participants.filter(p => p.id !== user.id).map(p => p.username).join(", ")}. Say hello! 👋

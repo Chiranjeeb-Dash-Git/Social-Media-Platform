@@ -50,6 +50,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
   const queryClient = useQueryClient();
 
+  // A fresh browser session must always start logged out. Keep the token only
+  // for navigation inside the same tab; opening the site in a new tab/session
+  // clears any persisted login from a previous visit.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (!sessionStorage.getItem("socialpulse-session")) {
+      sessionStorage.setItem("socialpulse-session", "1");
+      localStorage.removeItem("token");
+      setToken(null);
+      queryClient.setQueryData(["user"], null);
+    }
+  }, [queryClient]);
+
   // Set up axios defaults
   useEffect(() => {
     if (token) {
