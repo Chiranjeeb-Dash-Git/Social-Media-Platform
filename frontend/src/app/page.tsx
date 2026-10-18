@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { motion } from "framer-motion";
-import { useQuery } from "react-query";
+import { useQuery, useQueryClient } from "react-query";
 import Link from "next/link";
 import { Bookmark, Clock, Film, Globe2, Home, Image as ImageIcon, Plus, ShieldAlert, ShoppingBag, Smile, Users, Video, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
@@ -14,9 +14,7 @@ import { CreatePostDialog } from "@/components/CreatePostDialog";
 import { AddFriendsModal } from "@/components/AddFriendsModal";
 
 type Community = { id: string; name: string; members: number };
-type Story = { id: string; title: string; author: string; createdAt: number; expiresAt: number; color: string };
-
-const storyColors = ["#2f7a4a", "#ff7a3d", "#3b6eff", "#9b5cff"];
+type Story = { id: string; text: string; mediaUrl?: string | null; mediaType?: string | null; createdAt: string; expiresAt: string; author: { username: string; image?: string | null } };
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -26,21 +24,13 @@ export default function HomePage() {
   const [showStoryCreator, setShowStoryCreator] = useState(false);
   const [storyTitle, setStoryTitle] = useState("");
   const [storyDuration, setStoryDuration] = useState("24");
-  const [stories, setStories] = useState<Story[]>([]);
+  const [storyMedia, setStoryMedia] = useState<{ url: string; type: string } | null>(null);
+  const [selectedStory, setSelectedStory] = useState<Story | null>(null);
   const [feedTab, setFeedTab] = useState<"ALL" | "FRIENDS" | "LIVE">("ALL");
 
   useEffect(() => setSearchQuery(new URLSearchParams(window.location.search).get("q") ?? ""), []);
-  useEffect(() => {
-    const loadStories = () => {
-      const saved = JSON.parse(localStorage.getItem("socialPulseStories") ?? "[]");
-      const active = Array.isArray(saved) ? saved.filter((story: Story) => story.expiresAt > Date.now()) : [];
-      setStories(active);
-      localStorage.setItem("socialPulseStories", JSON.stringify(active));
-    };
-    loadStories();
-    const timer = window.setInterval(loadStories, 60000);
-    return () => window.clearInterval(timer);
-  }, []);
+  const queryClient = useQueryClient();
+  const { data: stories = [] } = useQuery<Story[]>({ queryKey: ["stories"], queryFn: async () => (await axios.get("/api/stories")).data, refetchInterval: 30000 });
 
   const { data: posts = [], isLoading: postsLoading } = useQuery({
     queryKey: ["posts"], queryFn: async () => (await axios.get<Post[]>("/api/posts")).data, refetchInterval: 15000,
@@ -55,36 +45,26 @@ export default function HomePage() {
     queryKey: ["pages_sample"], queryFn: async () => (await axios.get<any[]>("/api/pages")).data,
   });
 
+  const isOnline = (lastSeen?: string | null) => Boolean(lastSeen && Date.now() - new Date(lastSeen).getTime() < 5 * 60 * 1000);
   const visiblePosts = useMemo(() => posts.filter((post) => {
     const matchesSearch = !searchQuery || [post.title, post.content ?? "", post.author?.username, post.community?.name].join(" ").toLowerCase().includes(searchQuery.toLowerCase());
     const matchesTab = feedTab === "ALL" || (feedTab === "LIVE" ? post.isLive : post.privacy === "FRIENDS" || post.author?.id === user?.id || post.upvotes > 2);
     return matchesSearch && matchesTab;
   }), [posts, searchQuery, feedTab, user?.id]);
 
-  const createStory = () => {
+  const createStory = async () => {
     const title = storyTitle.trim();
-    if (!title) return;
-    const now = Date.now();
-    const nextStory: Story = {
-      id: `${now}`,
-      title,
-      author: user?.username || "Guest",
-      createdAt: now,
-      expiresAt: now + Number(storyDuration) * 60 * 60 * 1000,
-      color: storyColors[stories.length % storyColors.length],
-    };
-    const nextStories = [nextStory, ...stories];
-    setStories(nextStories);
-    localStorage.setItem("socialPulseStories", JSON.stringify(nextStories));
+    if (!title && !storyMedia) return;
+    if (!user) { setShowStoryCreator(false); return; }
+    await axios.post("/api/stories", { text: title, mediaUrl: storyMedia?.url, mediaType: storyMedia?.type, durationHours: Number(storyDuration) }, { headers: { Authorization: `Bearer ${localStorage.getItem("token")}` } });
+    queryClient.invalidateQueries(["stories"]);
     setStoryTitle("");
+    setStoryMedia(null);
     setStoryDuration("24");
     setShowStoryCreator(false);
   };
 
-  const timeLeft = (story: Story) => {
-    const hours = Math.max(1, Math.ceil((story.expiresAt - Date.now()) / (60 * 60 * 1000)));
-    return `${hours}h left`;
-  };
+  const handleStoryMedia = (file: File) => { if (file.size > 4 * 1024 * 1024) return; const reader = new FileReader(); reader.onload = () => setStoryMedia({ url: String(reader.result), type: file.type }); reader.readAsDataURL(file); };
 
   return (
     <main className="pulse-page min-h-screen pb-4">
@@ -109,8 +89,8 @@ export default function HomePage() {
           <div className="pulse-card p-3 sm:p-[18px] dark:p-5 dark:sm:p-6">
             <div className="flex gap-3 overflow-x-auto pb-1">
               <button onClick={() => setShowStoryCreator(true)} className="pulse-story-add flex h-[160px] min-w-[100px] flex-col items-center justify-end rounded-[18px] pb-3 text-xs font-bold"><span className="mb-12 flex h-10 w-10 items-center justify-center rounded-xl pulse-cta text-2xl">+</span>Add Story</button>
-              {stories.map((story) => <button key={story.id} className="pulse-story relative h-[160px] min-w-[100px] overflow-hidden rounded-[18px] p-3 text-left" style={{ background: `linear-gradient(160deg, ${story.color}, #0c2717)` }}><span className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/80 to-transparent" /><Avatar src={user?.image} alt={story.author} size="sm" className="absolute left-2 top-2 border-[#d8c774]" /><span className="absolute bottom-8 left-2 right-2 line-clamp-2 text-xs font-bold text-white">{story.title}</span><span className="absolute bottom-3 left-2 flex items-center gap-1 text-[10px] font-bold text-white/75"><Clock className="h-3 w-3" />{timeLeft(story)}</span></button>)}
-              {!stories.length && ["Meera", "Rohan", "Isha", "Kabir"].map((name, index) => <div key={name} className="pulse-story relative h-[160px] min-w-[100px] overflow-hidden rounded-[18px] bg-cover bg-center text-left" style={{ backgroundImage: `url(https://picsum.photos/seed/story-${index}/200/300)` }}><span className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-[#0c2717]/90 to-transparent" /><Avatar src={`https://i.pravatar.cc/60?img=${index + 5}`} alt={name} size="sm" className="absolute left-2 top-2 border-[#d8c774]" /><span className="absolute bottom-3 left-2 text-xs font-bold text-white">{name}</span></div>)}
+              {stories.map((story) => <button key={story.id} onClick={() => setSelectedStory(story)} className="pulse-story relative h-[160px] min-w-[100px] overflow-hidden rounded-[18px] p-3 text-left" style={{ backgroundImage: story.mediaUrl ? `url(${story.mediaUrl})` : undefined, background: story.mediaUrl ? undefined : "linear-gradient(160deg,#315ee9,#0c2717)", backgroundSize: "cover", backgroundPosition: "center" }}><span className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent" /><Avatar src={story.author.image} alt={story.author.username} size="sm" className="absolute left-2 top-2 border-white" /><span className="absolute bottom-3 left-2 right-2 line-clamp-2 text-xs font-bold text-white">{story.author.username}{story.text ? `: ${story.text}` : ""}</span></button>)}
+              {!stories.length && <div className="flex h-[160px] min-w-[220px] items-center justify-center rounded-[18px] border border-dashed border-border text-center text-xs text-muted-foreground">No stories yet. Be the first to share.</div>}
             </div>
           </div>
 
@@ -126,11 +106,12 @@ export default function HomePage() {
 
         <aside className="pulse-side hidden lg:sticky lg:top-14 lg:block lg:h-[calc(100vh-3.5rem)] lg:overflow-y-auto dark:lg:top-20 dark:lg:h-[calc(100vh-5rem)]">
           <div className="pulse-card p-5"><div className="pulse-card-head"><h4>Suggested Pages</h4><Link href="/pages" className="orange">See All</Link></div><div className="pulse-empty-box py-8"><p>Discover Creator Pages in the Pages tab!</p><Button asChild className="mt-4 w-full rounded-xl border border-white/[0.08] bg-white/[0.06] text-white hover:bg-white/[0.1]"><Link href="/pages">Explore Creator Pages</Link></Button></div></div>
-          <div className="pulse-card mt-5 p-5"><div className="pulse-card-head"><h4>Active Friends</h4><button onClick={() => setShowAddFriendsModal(true)}>+ Add Friends</button></div>{activeFriends.length ? <div className="space-y-2">{activeFriends.slice(0, 8).map((friend: any) => <button key={friend.id} onClick={() => window.dispatchEvent(new CustomEvent("open-chat-with", { detail: { targetUserId: friend.id, targetUsername: friend.username, targetImage: friend.image } }))} className="flex w-full items-center gap-3 rounded-2xl p-2 text-left text-sm font-bold text-[#123b21] hover:bg-white/60 dark:text-[#eef0f5] dark:hover:bg-white/[0.06]"><Avatar src={friend.image} alt={friend.username} size="sm" /><span>{friend.username}</span><i className="ml-auto h-2 w-2 rounded-full bg-[#2ecf78] shadow-[0_0_8px_#2ecf78]" /></button>)}</div> : <div className="pulse-empty-box py-8"><Users className="mx-auto mb-4 h-8 w-8 text-[#4a8a5c] dark:text-[#9b5cff]" /><h5>No friends connected</h5><p>Add friends to see their active status, share posts, and chat!</p><Button onClick={() => setShowAddFriendsModal(true)} className="mt-4 w-full rounded-xl bg-[#123b21] text-white shadow-[0_10px_22px_rgba(18,59,33,.18)] dark:bg-[#315ee9] dark:shadow-[0_10px_22px_rgba(59,110,255,.38)]">Find New Friends</Button></div>}</div>
+          <div className="pulse-card mt-5 p-5"><div className="pulse-card-head"><h4>Friends</h4><button onClick={() => setShowAddFriendsModal(true)}>+ Add Friends</button></div>{activeFriends.length ? <div className="space-y-2">{activeFriends.slice(0, 8).map((friend: any) => <button key={friend.id} onClick={() => window.dispatchEvent(new CustomEvent("open-chat-with", { detail: { targetUserId: friend.id, targetUsername: friend.username, targetImage: friend.image } }))} className="flex w-full items-center gap-3 rounded-2xl p-2 text-left text-sm font-bold text-[#123b21] hover:bg-white/60 dark:text-[#eef0f5] dark:hover:bg-white/[0.06]"><Avatar src={friend.image} alt={friend.username} size="sm" /><span>{friend.username}</span><span className="ml-auto flex items-center gap-1 text-[10px] font-normal text-muted-foreground"><i className={`h-2 w-2 rounded-full ${isOnline(friend.lastSeen) ? "bg-[#2ecf78]" : "bg-gray-400"}`} />{isOnline(friend.lastSeen) ? "Online" : "Offline"}</span></button>)}</div> : <div className="pulse-empty-box py-8"><Users className="mx-auto mb-4 h-8 w-8 text-[#4a8a5c] dark:text-[#9b5cff]" /><h5>No friends connected</h5><p>Add real friends to see their status, share posts, and chat.</p><Button onClick={() => setShowAddFriendsModal(true)} className="mt-4 w-full rounded-xl bg-[#123b21] text-white shadow-[0_10px_22px_rgba(18,59,33,.18)] dark:bg-[#315ee9] dark:shadow-[0_10px_22px_rgba(59,110,255,.38)]">Find New Friends</Button></div>}</div>
           <div className="px-2 pt-8 text-xs text-[#8b90a3]"><div className="flex gap-2"><span>Privacy</span><span>·</span><span>Terms</span><span>·</span><span>Safety</span></div><p className="mt-2 text-[#5a5f70]">© 2026 SocialPulse Platform. All rights reserved.</p></div>
         </aside>
       </div>
-      {showStoryCreator && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="pulse-card w-full max-w-md p-5"><div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black">Create Story</h3><button onClick={() => setShowStoryCreator(false)} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></div><label className="text-xs font-bold uppercase tracking-[1px] text-muted-foreground">Story text</label><textarea value={storyTitle} onChange={(event) => setStoryTitle(event.target.value)} maxLength={120} className="mt-2 min-h-28 w-full rounded-2xl border border-border bg-background/70 p-4 text-sm outline-none focus:ring-2 focus:ring-primary/30 dark:border-white/[0.08] dark:bg-white/[0.04]" placeholder="Share a quick update..." /><label className="mt-4 block text-xs font-bold uppercase tracking-[1px] text-muted-foreground">Keep story for</label><select value={storyDuration} onChange={(event) => setStoryDuration(event.target.value)} className="mt-2 w-full rounded-xl border border-border bg-background/70 p-3 text-sm outline-none dark:border-white/[0.08] dark:bg-[#12141d]"><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option></select><Button onClick={createStory} className="mt-5 w-full rounded-xl bg-[#315ee9] text-white">Add to Story Section</Button></div></div>}
+      {showStoryCreator && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm"><div className="pulse-card w-full max-w-md p-5"><div className="mb-4 flex items-center justify-between"><h3 className="text-lg font-black">Create Story</h3><button onClick={() => setShowStoryCreator(false)} className="rounded-full p-2 hover:bg-white/10"><X className="h-5 w-5" /></button></div><label className="text-xs font-bold uppercase tracking-[1px] text-muted-foreground">Text or photo</label><textarea value={storyTitle} onChange={(event) => setStoryTitle(event.target.value)} maxLength={120} className="mt-2 min-h-28 w-full rounded-2xl border border-border bg-background/70 p-4 text-sm" placeholder="Share a quick update..." /><input type="file" accept="image/*" className="mt-4 block w-full text-sm" onChange={e => { const file = e.target.files?.[0]; if (file) handleStoryMedia(file); }} />{storyMedia && <img src={storyMedia.url} alt="Story preview" className="mt-3 max-h-48 w-full rounded-xl object-cover" />}<select value={storyDuration} onChange={(event) => setStoryDuration(event.target.value)} className="mt-4 w-full rounded-xl border border-border bg-background/70 p-3 text-sm"><option value="6">6 hours</option><option value="12">12 hours</option><option value="24">24 hours</option></select><Button onClick={createStory} className="mt-5 w-full rounded-xl bg-[#315ee9] text-white">Add to Story Section</Button></div></div>}
+      {selectedStory && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4" onClick={() => setSelectedStory(null)}><div className="relative max-h-[90vh] max-w-lg overflow-hidden rounded-2xl bg-card" onClick={e => e.stopPropagation()}>{selectedStory.mediaUrl && <img src={selectedStory.mediaUrl} alt="Story" className="max-h-[75vh] w-full object-contain" />}<div className="p-4"><div className="font-bold">{selectedStory.author.username}</div><p className="text-sm">{selectedStory.text}</p></div></div></div>}
       {showCreatePost && <CreatePostDialog onClose={() => setShowCreatePost(false)} />}{showAddFriendsModal && <AddFriendsModal onClose={() => setShowAddFriendsModal(false)} />}
     </main>
   );

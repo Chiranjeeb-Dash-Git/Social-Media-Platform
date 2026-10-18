@@ -35,7 +35,7 @@ import { useTheme } from "next-themes";
 import { NotificationDropdown } from "@/components/NotificationDropdown";
 
 export function Navbar() {
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const { theme, setTheme } = useTheme();
   const pathname = usePathname();
   const router = useRouter();
@@ -294,7 +294,7 @@ export function Navbar() {
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={logout} className="flex items-center font-medium text-red-600 rounded-xl">
+                <DropdownMenuItem onClick={async () => { if (token) await axios.post("/api/auth/logout", {}, { headers: { Authorization: `Bearer ${token}` } }); logout(); router.push("/"); }} className="flex items-center font-medium text-red-600 rounded-xl">
                   <LogOut className="mr-2.5 h-4 w-4" />
                   Log out
                 </DropdownMenuItem>

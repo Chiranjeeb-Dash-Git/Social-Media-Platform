@@ -73,6 +73,8 @@ export type Post = {
     comments: number;
   };
   createdAt: string | Date;
+  shareCount?: number;
+  reactionCounts?: Record<string, number>;
 };
 
 interface PostCardProps {
@@ -118,12 +120,11 @@ export function PostCard({ post }: PostCardProps) {
   // Facebook Reaction & Poll States
   const [showReactionBar, setShowReactionBar] = useState(false);
   const [myReaction, setMyReaction] = useState<string | null>(null);
-  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>({ LIKE: Math.floor((post.upvotes || 5) / 2) || 1, LOVE: 1 });
+  const [reactionCounts, setReactionCounts] = useState<Record<string, number>>(post.reactionCounts || {});
   const [pollState, setPollState] = useState<any>(post.pollData || null);
   const [votedOptionIdx, setVotedOptionIdx] = useState<number | null>(null);
 
-  const isGuestAuthor = displayPost.author?.username?.toLowerCase() === "guest" || (displayPost.author as any)?.email === "guest@example.com";
-  const canManagePost = user?.id === displayPost.author?.id || isGuestAuthor || (user as any)?.role === "admin";
+  const canManagePost = user?.id === displayPost.author?.id || (user as any)?.role === "admin";
 
   const postUrl = useMemo(() => {
     if (typeof window === "undefined") return `/post/${post.id}`;
@@ -136,6 +137,7 @@ export function PostCard({ post }: PostCardProps) {
     setDownvotes(post.downvotes || 0);
     setDraftTitle(post.title);
     setDraftContent(post.content ?? "");
+    setReactionCounts(post.reactionCounts || {});
     setIsDeleted(false);
     if (post.pollData) setPollState(post.pollData);
   }, [post]);
@@ -227,10 +229,13 @@ export function PostCard({ post }: PostCardProps) {
           text: displayPost.content ?? "",
           url: postUrl,
         });
+        if (token) await axios.post(`/api/posts/${displayPost.id}`, {}, { headers: { Authorization: `Bearer ${token}` } });
+        queryClient.invalidateQueries(["posts"]);
         return;
       } catch (err) {}
     }
     await copyPostLink();
+    if (token) { await axios.post(`/api/posts/${displayPost.id}`, {}, { headers: { Authorization: `Bearer ${token}` } }); queryClient.invalidateQueries(["posts"]); }
   };
 
   const handlePollVote = (idx: number) => {
@@ -497,12 +502,12 @@ export function PostCard({ post }: PostCardProps) {
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-[10px] text-white shadow-xs">❤️</span>
               <span className="flex h-5 w-5 items-center justify-center rounded-full bg-amber-500 text-[10px] text-white shadow-xs">😂</span>
             </div>
-            <span>{Object.values(reactionCounts).reduce((a, b) => a + b, 0) + (myReaction ? 1 : 0)} reactions</span>
+            <span>{Object.values(reactionCounts).reduce((a, b) => a + b, 0)} reactions</span>
           </div>
           <div className="flex items-center gap-3">
             <Link href={`/post/${displayPost.id}`} className="hover:underline">{displayPost._count?.comments || 0} comments</Link>
             <span>•</span>
-            <span>42 shares</span>
+            <span>{displayPost.shareCount || 0} shares</span>
           </div>
         </div>
 

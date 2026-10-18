@@ -73,15 +73,15 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
   });
 
   const updateProfileMutation = useMutation(
-    async () => {
+    async (overrides: { image?: string; coverPhoto?: string } = {}) => {
       if (!token) throw new Error("Unauthorized");
       const res = await axios.patch("/api/users/profile", {
         bio,
         employment,
         education,
         location,
-        coverPhoto: coverPhotoUrl || "https://images.unsplash.com/photo-1707343843467-98e24e52d329",
-        image: avatarUrl || data?.user?.image
+        coverPhoto: overrides.coverPhoto ?? (coverPhotoUrl || "https://images.unsplash.com/photo-1707343843467-98e24e52d329"),
+        image: overrides.image ?? (avatarUrl || data?.user?.image)
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -167,7 +167,7 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
               <label className="absolute bottom-4 right-4 bg-black/70 hover:bg-black/90 text-white px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 cursor-pointer backdrop-blur-md transition-all shadow-md">
                 <Camera className="h-4 w-4" />
                 <span>Edit Cover Photo</span>
-                <input type="file" accept="image/*" className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, (val) => { setCoverPhotoUrl(val); updateProfileMutation.mutate(); }); }} />
+                  <input type="file" accept="image/*" className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, (val) => { setCoverPhotoUrl(val); updateProfileMutation.mutate({ coverPhoto: val }); }); }} />
               </label>
             )}
           </div>
@@ -182,7 +182,7 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
                 {isSelf && (
                   <label className="absolute bottom-1 right-1 bg-primary text-primary-foreground p-2 rounded-full cursor-pointer shadow-lg hover:scale-110 transition-transform">
                     <Camera className="h-4 w-4" />
-                    <input type="file" accept="image/*" className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, (val) => { setAvatarUrl(val); updateProfileMutation.mutate(); }); }} />
+                    <input type="file" accept="image/*" className="sr-only" onChange={e => { const f = e.target.files?.[0]; if (f) handleImageFile(f, (val) => { setAvatarUrl(val); updateProfileMutation.mutate({ image: val }); }); }} />
                   </label>
                 )}
               </div>
@@ -191,8 +191,8 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
                   <span>{profileUser.username}</span>
                   {profileUser.isVerified && <span className="bg-blue-600 text-white h-5 w-5 rounded-full text-xs font-bold flex items-center justify-center" title="Verified Creator">✓</span>}
                 </h1>
-                <p className="text-sm font-semibold text-muted-foreground">{profileUser.email || "Verified Platform Member"}</p>
-                <p className="text-xs text-primary font-bold mt-1">482 Friends • {profileUser.karma || 120} Karma</p>
+                <p className="text-sm font-semibold text-muted-foreground">User ID: {profileUser.username}</p>
+                <p className="text-xs text-primary font-bold mt-1">{profileUser.karma || 0} Karma</p>
               </div>
             </div>
 
@@ -315,7 +315,7 @@ export function UserProfileClient({ username }: UserProfileClientProps) {
             </div>
             <div className="flex justify-end gap-3 pt-2 border-t">
               <Button variant="ghost" onClick={() => setIsEditingProfile(false)} className="rounded-xl font-bold">Cancel</Button>
-              <Button onClick={() => updateProfileMutation.mutate()} disabled={updateProfileMutation.isLoading} className="rounded-xl bg-primary text-primary-foreground font-bold px-6">
+              <Button onClick={() => updateProfileMutation.mutate({})} disabled={updateProfileMutation.isLoading} className="rounded-xl bg-primary text-primary-foreground font-bold px-6">
                 {updateProfileMutation.isLoading ? "Saving..." : "Save Changes"}
               </Button>
             </div>

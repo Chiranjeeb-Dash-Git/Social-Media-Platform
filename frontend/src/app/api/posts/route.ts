@@ -13,13 +13,13 @@ const getToken = (req: Request) => {
 const getActor = async (req: Request) => {
   const token = getToken(req);
   const user = token ? await dataStore.auth.getUserFromToken(token) : null;
-  return user ?? dataStore.auth.getOrCreateGuestUser();
+  return user;
 };
 
 export async function GET(req: Request) {
   try {
     const user = await getActor(req);
-    const userId: string = (user as any)?.id || "guest";
+    const userId: string = (user as any)?.id || "";
     const allPosts = await dataStore.post.findMany();
 
     const uniqueAuthorIds = Array.from(new Set((allPosts as any[]).map(p => (p.author as any)?.id).filter((id): id is string => Boolean(id) && id !== userId)));
@@ -69,6 +69,7 @@ export async function POST(req: Request) {
     }
 
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
 
     const post = await dataStore.post.create({
       data: {

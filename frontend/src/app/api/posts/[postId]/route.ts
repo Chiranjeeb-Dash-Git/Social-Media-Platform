@@ -115,3 +115,12 @@ export async function DELETE(_req: Request, { params }: RouteContext) {
     return NextResponse.json({ error: "Could not delete post" }, { status: 500 });
   }
 }
+
+export async function POST(req: Request, { params }: RouteContext) {
+  try {
+    const { postId } = await params;
+    const user = await getAuthenticatedUser(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
+    return NextResponse.json(await dataStore.post.share(postId, user.id), { status: 200 });
+  } catch (error: any) { return NextResponse.json({ error: error.message || "Could not share post" }, { status: 400 }); }
+}

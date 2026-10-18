@@ -7,12 +7,13 @@ const getActor = async (req: Request) => {
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
   const user = token ? await dataStore.auth.getUserFromToken(token) : null;
-  return user ?? dataStore.auth.getOrCreateGuestUser();
+  return user;
 };
 
 export async function POST(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const { postId, commentId, type } = await req.json();
 
     if (!type || (!postId && !commentId)) {

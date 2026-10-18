@@ -7,12 +7,13 @@ const getActor = async (req: Request) => {
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
   const user = token ? await dataStore.auth.getUserFromToken(token) : null;
-  return user ?? dataStore.auth.getOrCreateGuestUser();
+  return user;
 };
 
 export async function GET(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const url = new URL(req.url);
     const type = url.searchParams.get("type") || "friends";
     const targetUserId = url.searchParams.get("targetUserId");
@@ -38,6 +39,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const body = await req.json();
     const { action, targetId, requestId, status } = body;
 

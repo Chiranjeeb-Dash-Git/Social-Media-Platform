@@ -134,6 +134,8 @@ const initSchema = async () => {
   // Safe Alter tables for new Facebook-style features
   await pool.query(`
     ALTER TABLE app_users ALTER COLUMN email DROP NOT NULL;
+    ALTER TABLE app_users ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE;
+    ALTER TABLE app_users ADD COLUMN IF NOT EXISTS last_seen TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS cover_photo TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS employment TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS education TEXT;
@@ -152,6 +154,7 @@ const initSchema = async () => {
     ALTER TABLE app_posts ADD COLUMN IF NOT EXISTS poll_data JSONB;
     ALTER TABLE app_posts ADD COLUMN IF NOT EXISTS is_live BOOLEAN DEFAULT FALSE;
     ALTER TABLE app_posts ADD COLUMN IF NOT EXISTS shared_from_id TEXT REFERENCES app_posts(id) ON DELETE SET NULL;
+    ALTER TABLE app_posts ADD COLUMN IF NOT EXISTS share_count INTEGER NOT NULL DEFAULT 0;
 
     ALTER TABLE app_comments ADD COLUMN IF NOT EXISTS parent_id TEXT REFERENCES app_comments(id) ON DELETE CASCADE;
     ALTER TABLE app_comments ADD COLUMN IF NOT EXISTS media_url TEXT;
@@ -276,6 +279,16 @@ const initSchema = async () => {
       status TEXT NOT NULL DEFAULT 'PENDING',
       created_at TEXT NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS app_stories (
+      id TEXT PRIMARY KEY,
+      author_id TEXT NOT NULL REFERENCES app_users(id) ON DELETE CASCADE,
+      text TEXT NOT NULL DEFAULT '',
+      media_url TEXT,
+      media_type TEXT,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL
+    );
   `);
 
   // Safe Alter tables for messaging features (files, unsend, edit, admin)
@@ -292,13 +305,6 @@ const initSchema = async () => {
 
   // Remove legacy demo content. All content in the product must belong to a real account.
   await pool.query("DELETE FROM app_communities WHERE name IN ('programming', 'nextjs', 'webdev')");
-  // Keep a destination available for the composer even before users create groups.
-  await pool.query(
-    `INSERT INTO app_communities (id, name, description, created_at, members, icon)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     ON CONFLICT (id) DO NOTHING`,
-    ["socialpulse-general", "general", "The public SocialPulse feed.", new Date().toISOString(), 1, "🌿"]
-  );
   await pool.query("DELETE FROM app_pages WHERE name = 'Next.js Developers'");
   await pool.query("DELETE FROM app_users WHERE username = 'guest' OR email = 'guest@example.com'");
   } catch (error) {
@@ -323,6 +329,8 @@ const mapUser = (row: any) => ({
   lifeEvents: typeof row.life_events === "string" ? JSON.parse(row.life_events) : (row.life_events || []),
   featuredPhotos: typeof row.featured_photos === "string" ? JSON.parse(row.featured_photos) : (row.featured_photos || []),
   role: row.role || "user",
+  isActive: row.is_active !== false,
+  lastSeen: row.last_seen || null,
 });
 
 const batchFetchUsers = async (userIds: string[]) => {
@@ -405,6 +413,7 @@ const hydratePosts = async (postRows: any[]) => {
       pollData: typeof postRow.poll_data === "string" ? JSON.parse(postRow.poll_data) : (postRow.poll_data || null),
       isLive: Boolean(postRow.is_live),
       sharedFromId: postRow.shared_from_id || null,
+      shareCount: Number(postRow.share_count || 0),
       _count: { comments: commentsCountByPost.get(postRow.id) || 0 }
     };
   });
@@ -490,6 +499,13 @@ const dataStore = {
       const res = await pool.query("DELETE FROM app_posts WHERE id = $1 RETURNING *", [args.where.id]);
       if (res.rows.length === 0) return null;
       return hydratePost(res.rows[0]);
+    },
+    share: async (postId: string, userId: string) => {
+      await initSchema();
+      const post = await pool.query("SELECT id FROM app_posts WHERE id = $1", [postId]);
+      if (post.rowCount === 0) throw new Error("Post not found");
+      const res = await pool.query("UPDATE app_posts SET share_count = share_count + 1 WHERE id = $1 RETURNING share_count", [postId]);
+      return { shareCount: Number(res.rows[0].share_count), userId };
     }
   },
   
@@ -1226,6 +1242,47 @@ const dataStore = {
     }
   },
 
+  story: {
+    findActive: async () => {
+      await initSchema();
+      const res = await pool.query(
+        `SELECT s.*, u.username, u.image FROM app_stories s
+         JOIN app_users u ON u.id = s.author_id
+         WHERE s.expires_at > $1 AND u.is_active = TRUE
+         ORDER BY s.created_at DESC LIMIT 100`,
+        [new Date().toISOString()]
+      );
+      return res.rows.map((row: any) => ({
+        id: row.id,
+        text: row.text,
+        mediaUrl: row.media_url || null,
+        mediaType: row.media_type || null,
+        createdAt: row.created_at,
+        expiresAt: row.expires_at,
+        author: { id: row.author_id, username: row.username, image: row.image || null }
+      }));
+    },
+    create: async (data: { authorId: string; text?: string; mediaUrl?: string; mediaType?: string; durationHours?: number }) => {
+      await initSchema();
+      if (!data.text?.trim() && !data.mediaUrl) throw new Error("Story text or photo is required");
+      const id = randomUUID();
+      const createdAt = new Date();
+      const expiresAt = new Date(createdAt.getTime() + Math.min(Math.max(data.durationHours || 24, 1), 24) * 60 * 60 * 1000);
+      const res = await pool.query(
+        `INSERT INTO app_stories (id, author_id, text, media_url, media_type, created_at, expires_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [id, data.authorId, data.text?.trim() || "", data.mediaUrl || null, data.mediaType || null, createdAt.toISOString(), expiresAt.toISOString()]
+      );
+      return res.rows[0];
+    },
+    delete: async (storyId: string, authorId: string) => {
+      await initSchema();
+      const res = await pool.query("DELETE FROM app_stories WHERE id = $1 AND author_id = $2 RETURNING id", [storyId, authorId]);
+      if (res.rowCount === 0) throw new Error("Story not found or not owned by you");
+      return { success: true };
+    }
+  },
+
   search: {
     query: async (q: string) => {
       await initSchema();
@@ -1295,12 +1352,34 @@ const dataStore = {
       const sessionRes = await pool.query("SELECT user_id FROM app_sessions WHERE token = $1", [token]);
       if (sessionRes.rows.length === 0) return null;
       
-      const userRes = await pool.query("SELECT * FROM app_users WHERE id = $1", [sessionRes.rows[0].user_id]);
-      return userRes.rows[0] ? mapUser(userRes.rows[0]) : null;
+      const userRes = await pool.query("SELECT * FROM app_users WHERE id = $1 AND is_active = TRUE", [sessionRes.rows[0].user_id]);
+      if (!userRes.rows[0]) return null;
+      await pool.query("UPDATE app_users SET last_seen = $1 WHERE id = $2", [new Date().toISOString(), userRes.rows[0].id]);
+      return mapUser({ ...userRes.rows[0], last_seen: new Date().toISOString() });
     },
     logout: async (token: string) => {
       await initSchema();
       await pool.query("DELETE FROM app_sessions WHERE token = $1", [token]);
+    },
+    logoutEverywhere: async (userId: string) => {
+      await initSchema();
+      await pool.query("DELETE FROM app_sessions WHERE user_id = $1", [userId]);
+    },
+    changePassword: async (userId: string, currentPassword: string, nextPassword: string) => {
+      await initSchema();
+      const res = await pool.query("SELECT password FROM app_users WHERE id = $1 AND is_active = TRUE", [userId]);
+      if (!res.rows[0] || !(await verifyPassword(currentPassword, res.rows[0].password))) throw new Error("Current password is incorrect");
+      await pool.query("UPDATE app_users SET password = $1 WHERE id = $2", [await hashPassword(nextPassword), userId]);
+      await pool.query("DELETE FROM app_sessions WHERE user_id = $1", [userId]);
+    },
+    deleteAccount: async (userId: string, permanent: boolean) => {
+      await initSchema();
+      if (permanent) {
+        await pool.query("DELETE FROM app_users WHERE id = $1", [userId]);
+      } else {
+        await pool.query("UPDATE app_users SET is_active = FALSE WHERE id = $1", [userId]);
+        await pool.query("DELETE FROM app_sessions WHERE user_id = $1", [userId]);
+      }
     }
   },
   
