@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 180" role="img" aria-labelledby="title desc">
+  <title id="title">SocialPulse</title>
+  <desc id="desc">Animated SocialPulse gradient mark</desc>
+  <defs><linearGradient id="pulse" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#FF5A36"/><stop offset=".52" stop-color="#FFB020"/><stop offset="1" stop-color="#14E3A4"/></linearGradient></defs>
+  <rect width="640" height="180" rx="38" fill="#0A100D"/>
+  <path d="M48 105h42l18-42 25 82 23-55h48" fill="none" stroke="url(#pulse)" stroke-linecap="round" stroke-linejoin="round" stroke-width="14" stroke-dasharray="380 0"><animate attributeName="stroke-dasharray" values="0 380;380 0;0 380" dur="3.2s" repeatCount="indefinite"/></path>
+  <text x="226" y="113" fill="#F6F2EA" font-family="Arial,sans-serif" font-size="58" font-weight="800" letter-spacing="-2">SocialPulse</text>
+</svg>

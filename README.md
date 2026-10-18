@@ -1,115 +1,83 @@
-# 🌐 Social Media Platform
+# SocialPulse
 
-![Next.js](https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=next.js)
-![React](https://img.shields.io/badge/React-18-blue?style=for-the-badge&logo=react)
-![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
-![Vercel](https://img.shields.io/badge/Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white)
+<p align="center">
+  <a href="https://social-media-platform-azure-ten.vercel.app/"><img src="https://social-media-platform-azure-ten.vercel.app/socialpulse-mark.svg" alt="SocialPulse" width="640" /></a>
+</p>
 
-A full-stack, high-performance web application designed to replicate the core features of Reddit. It features a modern, "Dark Cinematic" UI design and is built for speed and scalability.
+<p align="center">
+  <a href="https://social-media-platform-azure-ten.vercel.app/"><img src="https://img.shields.io/badge/Live%20website-Open%20SocialPulse-FF5A36?style=for-the-badge&logo=vercel&logoColor=white" alt="Open live website" /></a>
+  <img src="https://img.shields.io/badge/Next.js-14.2-black?style=for-the-badge&logo=next.js" alt="Next.js 14" />
+  <img src="https://img.shields.io/badge/TypeScript-React-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript and React" />
+  <img src="https://img.shields.io/badge/PostgreSQL-Neon-316192?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+</p>
 
-This project was recently refactored into a **modern Next.js 16 Serverless application** backed by a **Neon PostgreSQL** database, making it fully ready for production deployment on Vercel.
+SocialPulse is a full-stack social network for posts, stories, direct and group messaging, communities, creator pages, profiles, notifications, and friend relationships. It is designed around registered users and PostgreSQL-backed data rather than seeded demo identities.
 
----
+## Product highlights
 
-## 🚀 Features
+- User-ID and password authentication with hashed passwords, bearer sessions, account security controls, and logout-everywhere support.
+- Real posts, comments, reactions, sharing, profiles, friend relationships, groups, pages, and expiring stories.
+- Direct and group messaging with photos, documents, voice notes, message editing/unsending, unread notifications, online presence, and clear-chat history.
+- Responsive chat UI with constrained media, mobile-safe scrolling, refresh-based real-time sync, and notification sound/toast alerts.
+- SocialPulse landing experience for logged-out visitors and a focused authenticated feed for members.
 
-- **Dynamic Feed:** View, sort, and interact with posts across the platform.
-- **Community Subreddits:** Dedicated pages for different topics (e.g., Programming, Next.js, Design).
-- **Post & Comment:** Create text, image, or link posts, and engage in nested discussions.
-- **Voting System:** Upvote or downvote posts with real-time score calculation.
-- **Authentication:** Custom JWT bearer-token session management without heavy external dependencies.
-- **Serverless Ready:** Built specifically to deploy perfectly on Vercel Edge/Node environments without memory bloat.
+## Architecture
 
----
+The production application lives in `frontend/`:
 
-## 💻 Technology Stack
+- **Next.js App Router** for the web application and serverless API route handlers.
+- **React 18 + TypeScript** for the client UI.
+- **Tailwind CSS, Radix UI, Framer Motion, and Lucide** for accessible, responsive interface components.
+- **Neon PostgreSQL + `pg`** for persistent application data and connection pooling.
+- **Vercel** for production hosting.
 
-### Frontend & Core Framework
-* **Next.js 16 (App Router):** Handles both the React frontend and the backend API routes via serverless functions.
-* **React 18:** Core UI library.
-* **TypeScript:** End-to-end type safety.
-* **Turbopack:** Ultra-fast local development bundler (`--turbo`).
+All backend endpoints are colocated with the app in `frontend/src/app/api/`. The repository intentionally does not include a second obsolete server or local database dump; production data is accessed through the configured PostgreSQL connection.
 
-### UI & Styling
-* **Tailwind CSS:** Utility-first CSS framework for styling.
-* **Radix UI:** Unstyled, accessible UI primitives (Dialogs, Dropdowns, Avatars, etc.).
-* **Framer Motion:** Smooth micro-animations and transitions.
-* **Lucide React:** Beautiful, consistent iconography.
+## Main API areas
 
-### Database & Data Management
-* **Database:** PostgreSQL (Hosted on Neon.tech).
-* **Driver:** `pg` (Node Postgres) with connection pooling.
-* **Architecture:** The database schema is auto-initialized on the first API hit if it doesn't exist, eliminating the need for complex manual migrations.
+`/api/auth` · `/api/users` · `/api/posts` · `/api/comments` · `/api/reactions` · `/api/messages` · `/api/stories` · `/api/communities` · `/api/pages` · `/api/notifications`
 
----
+## Local development
 
-## 🗄️ Database Schema
+Requirements: Node.js 18.17+ and a PostgreSQL/Neon database.
 
-The database uses a clean relational structure designed for performance:
+```bash
+git clone https://github.com/Chiranjeeb-Dash-Git/Social-Media-Platform.git
+cd Social-Media-Platform
+npm install
+```
 
-* **`app_users`**: Stores user profiles (`username`, `karma`, etc.)
-* **`app_communities`**: Subreddits/Categories for posts.
-* **`app_posts`**: The core content generated by users.
-* **`app_comments`**: Text discussions attached to posts.
-* **`app_votes`**: Tracks upvotes and downvotes via composite primary keys `(user_id, post_id)` to ensure single votes.
-* **`app_sessions`**: JWT/Token-based session management.
+Create `frontend/.env.local`:
 
----
+```env
+DATABASE_URL="postgresql://user:password@host/database?sslmode=require"
+```
 
-## 📡 API Architecture (Next.js Route Handlers)
+Run the development server:
 
-All backend logic exists within the Next.js App Router API directory (`frontend/src/app/api/`):
+```bash
+npm run dev
+```
 
-* `/api/auth/register` & `/api/auth/login`: Handles token generation and credential validation.
-* `/api/communities`: Fetches a list of all communities, including post counts.
-* `/api/posts`: Fetches the feed (hydrated with author, community, and vote counts concurrently).
-* `/api/vote`: Toggles a vote (upvote/downvote/remove) for a specific post.
-* `/api/comments`: Retrieves and posts new comments to discussions.
+Open `http://localhost:3000`.
 
----
+## Production deployment
 
-## ⚡ Key Performance Optimizations
+The Vercel project uses `frontend` as its Root Directory. Configure `DATABASE_URL` in the Vercel project environment, then deploy with `vercel --prod`.
 
-1. **Concurrent Hydration:** When a post is fetched, the API concurrently fetches the author, community, vote count, and comment count using `Promise.all`. This ensures a single API call provides the frontend with all the data it needs to render a rich Post Card without waterfall fetching.
-2. **Turbopack Config:** The `next.config.js` is strictly optimized for Turbopack (`turbopack: {}`) and uses `optimizePackageImports` for `lucide-react` to ensure blazing-fast local compilation speeds.
-3. **No Migration Bottlenecks:** Because the app relies on `pg` and auto-initializes its schema on boot, it requires exactly zero manual database migrations. 
+Live application: **[social-media-platform-azure-ten.vercel.app](https://social-media-platform-azure-ten.vercel.app/)**
 
----
+## Project layout
 
-## 🛠️ Local Development
+```text
+frontend/
+  src/app/          Pages and API route handlers
+  src/components/   Reusable UI and feature components
+  src/contexts/     Authentication and theme state
+  src/lib/          PostgreSQL data access and shared utilities
+  public/           Public assets and project branding
+```
 
-To run this project locally:
+## License
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/Chiranjeeb-Dash-Git/Social-Media-Platform.git
-   cd Social-Media-Platform/frontend
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Set up Environment Variables:**
-   Create a `.env` file in the `frontend` directory and add your Neon PostgreSQL connection string:
-   ```env
-   DATABASE_URL="postgresql://user:password@endpoint.neon.tech/neondb?sslmode=require"
-   ```
-
-4. **Start the Development Server:**
-   ```bash
-   npm run dev
-   ```
-
----
-
-## 🌐 Deployment (Vercel)
-
-This project is perfectly tuned for Vercel deployment:
-1. Import the repository into Vercel.
-2. Ensure the **Root Directory** is set to `frontend`.
-3. Add the `DATABASE_URL` to the Environment Variables.
-4. Deploy! The database tables will be generated automatically on the very first visit.
+This project is maintained as a personal portfolio application by Chiranjeeb Dash.
