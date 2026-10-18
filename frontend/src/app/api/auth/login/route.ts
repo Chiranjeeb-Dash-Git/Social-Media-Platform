@@ -5,16 +5,16 @@ export const dynamic = "force-dynamic";
 
 export async function POST(req: Request) {
   try {
-    const { email, password } = await req.json();
+    const { username, password } = await req.json();
 
-    if (!email || !password) {
+    if (!username || !password || username.length > 64 || password.length > 256) {
       return NextResponse.json(
-        { error: "Email and password are required" },
+        { error: "User ID and password are required" },
         { status: 400 }
       );
     }
 
-    const result = await dataStore.auth.login(email, password);
+    const result = await dataStore.auth.login(username, password);
 
     if (!result) {
       return NextResponse.json(

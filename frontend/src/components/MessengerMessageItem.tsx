@@ -89,7 +89,14 @@ function VoiceNotePlayer({ url, content }: { url: string; content?: string }) {
           <span>🎙️ Live WhatsApp Voice Note</span>
           <button onClick={() => setUseNative(false)} className="text-[10px] text-muted-foreground underline">Custom Player</button>
         </div>
-        <audio src={url} controls controlsList="nodownload" className="w-full h-10" />
+        <audio
+          src={url}
+          controls
+          controlsList="nodownload"
+          preload="metadata"
+          className="w-full h-10"
+          onError={() => toast.error("This voice note could not be decoded by the browser")}
+        />
       </div>
     );
   }

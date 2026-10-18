@@ -188,6 +188,9 @@ export function MessengerPopup() {
     if (isRecording) {
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        // Flush the final encoded chunk before stopping; some Chromium builds otherwise
+        // emit an empty/partial Blob, which produces a silent or unplayable note.
+        if (typeof mediaRecorder.requestData === "function") mediaRecorder.requestData();
         mediaRecorder.stop();
       }
       setIsRecording(false);
@@ -223,6 +226,10 @@ export function MessengerPopup() {
           const durationStr = `${Math.floor(elapsedSec / 60)}:${Math.floor(elapsedSec % 60) < 10 ? "0" : ""}${Math.floor(elapsedSec % 60)}`;
           const blobType = mimeType || recorder.mimeType || "audio/webm";
           const blob = new Blob(chunks, { type: blobType });
+          if (blob.size === 0) {
+            toast.error("No audio was captured. Please try recording again.");
+            return;
+          }
           const reader = new FileReader();
           reader.readAsDataURL(blob);
           reader.onloadend = () => {

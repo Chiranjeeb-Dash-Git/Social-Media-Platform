@@ -7,17 +7,18 @@ const getActor = async (req: Request) => {
   const authHeader = req.headers.get("authorization");
   const token = authHeader?.startsWith("Bearer ") ? authHeader.slice("Bearer ".length) : null;
   const user = token ? await dataStore.auth.getUserFromToken(token) : null;
-  return user ?? dataStore.auth.getOrCreateGuestUser();
+  return user;
 };
 
 export async function GET(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const url = new URL(req.url);
     const cid = url.searchParams.get("conversationId");
 
     if (cid) {
-      const msgs = await dataStore.messenger.getMessages(cid);
+      const msgs = await dataStore.messenger.getMessages(cid, user.id);
       return NextResponse.json(msgs, { status: 200 });
     }
 
@@ -32,6 +33,7 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   try {
     const user = await getActor(req);
+    if (!user) return NextResponse.json({ error: "Authentication required" }, { status: 401 });
     const body = await req.json();
     const { action, conversationId, content, mediaUrl, voiceNoteUrl, fileUrl, fileName, fileType, fileSize, participantIds, isGroup, name, messageId } = body;
 
@@ -74,6 +76,11 @@ export async function POST(req: Request) {
         fileSize
       });
       return NextResponse.json(msg, { status: 201 });
+    }
+
+    if (action === "clear_conversation") {
+      if (!conversationId) return NextResponse.json({ error: "Conversation ID required" }, { status: 400 });
+      return NextResponse.json(await dataStore.messenger.clearConversation(conversationId, user.id), { status: 200 });
     }
 
     if (action === "delete_message" || action === "unsend_message") {

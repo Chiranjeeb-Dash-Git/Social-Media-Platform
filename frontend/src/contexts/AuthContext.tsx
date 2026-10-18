@@ -8,7 +8,7 @@ import axios, { AxiosError } from "axios";
 interface User {
   id: string;
   username: string;
-  email: string;
+  email?: string | null;
   image?: string;
   bio?: string;
   karma: number;
@@ -19,8 +19,8 @@ interface AuthContextType {
   user: User | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (username: string, email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
+  register: (username: string, password: string) => Promise<void>;
   logout: () => void;
   updateUser: (userData: Partial<User>) => void;
 }
@@ -81,8 +81,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Login mutation
   const loginMutation = useMutation({
-    mutationFn: async ({ email, password }: { email: string; password: string }) => {
-      const response = await axios.post<AuthResponse>("/api/auth/login", { email, password });
+    mutationFn: async ({ username, password }: { username: string; password: string }) => {
+      const response = await axios.post<AuthResponse>("/api/auth/login", { username, password });
       return response.data;
     },
     onSuccess: (data) => {
@@ -101,16 +101,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const registerMutation = useMutation({
     mutationFn: async ({
       username,
-      email,
       password,
     }: {
       username: string;
-      email: string;
       password: string;
     }) => {
       const response = await axios.post<AuthResponse>("/api/auth/register", {
         username,
-        email,
         password,
       });
       return response.data;
@@ -120,19 +117,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem("token", data.token);
       setToken(data.token);
       queryClient.setQueryData(["user"], data.user);
-      toast.success(`Welcome to Reddit Clone, ${data.user.username}!`);
+      toast.success(`Welcome to SocialPulse, ${data.user.username}!`);
     },
     onError: (error: unknown) => {
       toast.error(getErrorMessage(error, "Registration failed"));
     },
   });
 
-  const login = async (email: string, password: string) => {
-    await loginMutation.mutateAsync({ email, password });
+  const login = async (username: string, password: string) => {
+    await loginMutation.mutateAsync({ username, password });
   };
 
-  const register = async (username: string, email: string, password: string) => {
-    await registerMutation.mutateAsync({ username, email, password });
+  const register = async (username: string, password: string) => {
+    await registerMutation.mutateAsync({ username, password });
   };
 
   const logout = useCallback(() => {

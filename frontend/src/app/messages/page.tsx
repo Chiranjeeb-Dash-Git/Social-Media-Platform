@@ -166,6 +166,22 @@ export default function FullMessengerPage() {
     }
   );
 
+  const clearConversationMutation = useMutation(
+    async (_unused: void) => {
+      if (!token || !activeConvId) throw new Error("Conversation is not selected");
+      const res = await axios.post("/api/messages", { action: "clear_conversation", conversationId: activeConvId }, { headers: { Authorization: `Bearer ${token}` } });
+      return res.data;
+    },
+    {
+      onSuccess: () => {
+        queryClient.invalidateQueries(["messenger_msgs", activeConvId]);
+        queryClient.invalidateQueries(["messenger_conversations"]);
+        toast.success("Chat cleared");
+      },
+      onError: () => { toast.error("Could not clear this chat"); }
+    }
+  );
+
   const createChatMutation = useMutation(
     async (data: { isGroup: boolean; name?: string; participantIds: string[] }) => {
       const res = await axios.post("/api/messages", {
@@ -243,6 +259,7 @@ export default function FullMessengerPage() {
     if (isRecording) {
       if (timerRef.current) clearInterval(timerRef.current);
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        if (typeof mediaRecorder.requestData === "function") mediaRecorder.requestData();
         mediaRecorder.stop();
       }
       setIsRecording(false);
@@ -278,6 +295,10 @@ export default function FullMessengerPage() {
           const durationStr = `${Math.floor(elapsedSec / 60)}:${Math.floor(elapsedSec % 60) < 10 ? "0" : ""}${Math.floor(elapsedSec % 60)}`;
           const blobType = mimeType || recorder.mimeType || "audio/webm";
           const blob = new Blob(chunks, { type: blobType });
+          if (blob.size === 0) {
+            toast.error("No audio was captured. Please try recording again.");
+            return;
+          }
           const reader = new FileReader();
           reader.readAsDataURL(blob);
           reader.onloadend = () => {
@@ -465,6 +486,20 @@ export default function FullMessengerPage() {
                   title={activeConv.isGroup ? "Group Settings & Members" : "Info"}
                 >
                   <Info className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    if (window.confirm("Clear all messages in this conversation? This cannot be undone.")) {
+                      clearConversationMutation.mutate();
+                    }
+                  }}
+                  className="rounded-xl h-9 w-9 p-0 text-red-500 hover:bg-red-500/10"
+                  title="Clear chat"
+                  disabled={clearConversationMutation.isLoading}
+                >
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               </div>
             </header>

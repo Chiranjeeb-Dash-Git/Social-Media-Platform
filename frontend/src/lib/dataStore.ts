@@ -1,5 +1,23 @@
-import { randomUUID } from "node:crypto";
+import { randomUUID, randomBytes, scrypt as nodeScrypt, timingSafeEqual } from "node:crypto";
+import { promisify } from "node:util";
 const { Pool } = require("pg");
+const scrypt = promisify(nodeScrypt);
+
+const hashPassword = async (password: string) => {
+  const salt = randomBytes(16).toString("hex");
+  const derivedKey = (await scrypt(password, salt, 64)) as Buffer;
+  return `scrypt$${salt}$${derivedKey.toString("hex")}`;
+};
+
+const verifyPassword = async (password: string, stored: string) => {
+  if (!stored) return false;
+  if (!stored.startsWith("scrypt$")) return stored === password;
+  const [, salt, expectedHex] = stored.split("$");
+  if (!salt || !expectedHex) return false;
+  const expected = Buffer.from(expectedHex, "hex");
+  const actual = (await scrypt(password, salt, expected.length)) as Buffer;
+  return expected.length === actual.length && timingSafeEqual(expected, actual);
+};
 
 type QueryArgs = Record<string, unknown>;
 type VoteType = "UP" | "DOWN";
@@ -61,7 +79,7 @@ const initSchema = async () => {
     CREATE TABLE IF NOT EXISTS app_users (
       id TEXT PRIMARY KEY,
       username TEXT NOT NULL UNIQUE,
-      email TEXT NOT NULL UNIQUE,
+      email TEXT UNIQUE,
       password TEXT NOT NULL,
       image TEXT,
       bio TEXT,
@@ -115,6 +133,7 @@ const initSchema = async () => {
   
   // Safe Alter tables for new Facebook-style features
   await pool.query(`
+    ALTER TABLE app_users ALTER COLUMN email DROP NOT NULL;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS cover_photo TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS employment TEXT;
     ALTER TABLE app_users ADD COLUMN IF NOT EXISTS education TEXT;
@@ -271,9 +290,8 @@ const initSchema = async () => {
     ALTER TABLE app_messages ADD COLUMN IF NOT EXISTS edited_at TEXT;
   `);
 
-  // Purge any fake default communities as requested by user
+  // Remove legacy demo content. All content in the product must belong to a real account.
   await pool.query("DELETE FROM app_communities WHERE name IN ('programming', 'nextjs', 'webdev')");
-
   // Keep a destination available for the composer even before users create groups.
   await pool.query(
     `INSERT INTO app_communities (id, name, description, created_at, members, icon)
@@ -281,26 +299,8 @@ const initSchema = async () => {
      ON CONFLICT (id) DO NOTHING`,
     ["socialpulse-general", "general", "The public SocialPulse feed.", new Date().toISOString(), 1, "🌿"]
   );
-
-
-  // Seed sample public Creator Page if empty
-  const pagesCount = await pool.query("SELECT id FROM app_pages LIMIT 1");
-  if (pagesCount.rowCount === 0) {
-    let guestRes = await pool.query("SELECT * FROM app_users WHERE username = 'guest'");
-    if (guestRes.rows.length === 0) {
-      const id = randomUUID();
-      guestRes = await pool.query(
-        `INSERT INTO app_users (id, username, email, password, image, bio, role) 
-         VALUES ($1, 'guest', 'guest@example.com', 'guest', 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest', 'Guest user', 'admin') RETURNING *`,
-        [id]
-      );
-    }
-    const guestId = guestRes.rows[0]?.id || "guest-1";
-    await pool.query(
-      "INSERT INTO app_pages (id, name, category, description, cover_photo, avatar, owner_id, followers, created_at) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) ON CONFLICT DO NOTHING",
-      ["page-1", "Next.js Developers", "Tech & Gaming", "The official public page for Next.js full-stack developers and enthusiasts.", "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=1200&auto=format&fit=crop&q=80", "https://api.dicebear.com/7.x/initials/svg?seed=nextjs&backgroundColor=000000", guestId, 1250, new Date().toISOString()]
-    );
-  }
+  await pool.query("DELETE FROM app_pages WHERE name = 'Next.js Developers'");
+  await pool.query("DELETE FROM app_users WHERE username = 'guest' OR email = 'guest@example.com'");
   } catch (error) {
     schemaInitialized = false;
     throw error;
@@ -980,8 +980,10 @@ const dataStore = {
         };
       }));
     },
-    getMessages: async (conversationId: string) => {
+    getMessages: async (conversationId: string, userId: string) => {
       await initSchema();
+      const access = await pool.query("SELECT 1 FROM app_conversation_participants WHERE conversation_id = $1 AND user_id = $2", [conversationId, userId]);
+      if (access.rowCount === 0) throw new Error("You are not a member of this conversation");
       const res = await pool.query("SELECT * FROM app_messages WHERE conversation_id = $1 ORDER BY created_at ASC LIMIT 100", [conversationId]);
       const sendersMap = await batchFetchUsers(res.rows.map((r: any) => r.sender_id));
       return res.rows.map((row: any) => ({
@@ -1005,6 +1007,8 @@ const dataStore = {
     },
     sendMessage: async (data: { conversationId: string, senderId: string, content?: string, mediaUrl?: string, voiceNoteUrl?: string, fileUrl?: string, fileName?: string, fileType?: string, fileSize?: number }) => {
       await initSchema();
+      const access = await pool.query("SELECT 1 FROM app_conversation_participants WHERE conversation_id = $1 AND user_id = $2", [data.conversationId, data.senderId]);
+      if (access.rowCount === 0) throw new Error("You are not a member of this conversation");
       const id = randomUUID();
       const createdAt = new Date().toISOString();
       await pool.query(
@@ -1139,6 +1143,13 @@ const dataStore = {
 
       const convs = await dataStore.messenger.getConversations(userId);
       return convs.find(c => c.id === conversationId) || null;
+    },
+    clearConversation: async (conversationId: string, userId: string) => {
+      await initSchema();
+      const access = await pool.query("SELECT 1 FROM app_conversation_participants WHERE conversation_id = $1 AND user_id = $2", [conversationId, userId]);
+      if (access.rowCount === 0) throw new Error("You are not a member of this conversation");
+      await pool.query("DELETE FROM app_messages WHERE conversation_id = $1", [conversationId]);
+      return { success: true };
     }
   },
 
@@ -1240,43 +1251,38 @@ const dataStore = {
   },
   
   auth: {
-    getOrCreateGuestUser: async () => {
+    // Kept only as a compatibility guard for older public-read routes. It never creates a user.
+    getOrCreateGuestUser: async () => null,
+    login: async (username: string, password: string) => {
       await initSchema();
-      let res = await pool.query("SELECT * FROM app_users WHERE username = 'guest'");
-      
-      if (res.rows.length === 0) {
-        const id = randomUUID();
-        res = await pool.query(
-          `INSERT INTO app_users (id, username, email, password, image, bio, role) 
-           VALUES ($1, 'guest', 'guest@example.com', 'guest', 'https://api.dicebear.com/7.x/avataaars/svg?seed=guest', 'Guest user', 'admin') RETURNING *`,
-          [id]
-        );
-      }
-      return mapUser(res.rows[0]);
-    },
-    login: async (email: string, password: string) => {
-      await initSchema();
-      const res = await pool.query("SELECT * FROM app_users WHERE LOWER(email) = LOWER($1)", [email]);
+      const res = await pool.query("SELECT * FROM app_users WHERE LOWER(username) = LOWER($1)", [username]);
       const user = res.rows[0];
       
-      if (!user || user.password !== password) return null;
+      if (!user || !(await verifyPassword(password, user.password))) return null;
+
+      // Upgrade legacy plaintext credentials on first successful login.
+      if (!user.password.startsWith("scrypt$")) {
+        user.password = await hashPassword(password);
+        await pool.query("UPDATE app_users SET password = $1 WHERE id = $2", [user.password, user.id]);
+      }
       
       const token = `${user.id}.${randomUUID()}`;
       await pool.query("INSERT INTO app_sessions (token, user_id) VALUES ($1, $2)", [token, user.id]);
       
       return { token, user: mapUser(user) };
     },
-    register: async (username: string, email: string, password: string) => {
+    register: async (username: string, password: string) => {
       await initSchema();
-      const checkRes = await pool.query("SELECT id FROM app_users WHERE LOWER(email) = LOWER($1) OR LOWER(username) = LOWER($2)", [email, username]);
+      const checkRes = await pool.query("SELECT id FROM app_users WHERE LOWER(username) = LOWER($1)", [username]);
       if (checkRes.rows.length > 0) return null;
       
       const id = randomUUID();
       const image = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(username)}`;
       
+      const passwordHash = await hashPassword(password);
       const res = await pool.query(
         "INSERT INTO app_users (id, username, email, password, image, bio, role) VALUES ($1, $2, $3, $4, $5, '', 'user') RETURNING *",
-        [id, username, email, password, image]
+        [id, username, `${username.toLowerCase()}@local.invalid`, passwordHash, image]
       );
       
       const token = `${id}.${randomUUID()}`;

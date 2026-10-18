@@ -5,12 +5,11 @@ import { motion } from "framer-motion";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/Button";
 import Link from "next/link";
-import { Eye, EyeOff, Mail, Lock, User } from "lucide-react";
+import { Eye, EyeOff, Lock, User } from "lucide-react";
 import { useRouter } from "next/navigation";
 
 export default function RegisterPage() {
   const [username, setUsername] = useState("");
-  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -29,11 +28,8 @@ export default function RegisterPage() {
     if (username.length > 20) {
       newErrors.username = "Username must be less than 20 characters";
     }
-    if (!email) {
-      newErrors.email = "Email is required";
-    }
-    if (password.length < 6) {
-      newErrors.password = "Password must be at least 6 characters";
+    if (password.length < 8) {
+      newErrors.password = "Password must be at least 8 characters";
     }
     if (password !== confirmPassword) {
       newErrors.confirmPassword = "Passwords do not match";
@@ -53,7 +49,7 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await register(username, email, password);
+      await register(username, password);
       router.push("/");
     } catch (error) {
       console.error("Registration failed:", error);
@@ -76,7 +72,7 @@ export default function RegisterPage() {
               <span className="text-2xl font-bold text-white">R</span>
             </div>
             <h1 className="text-2xl font-bold text-gradient">
-              Join Reddit Clone
+              Create your account
             </h1>
             <p className="text-muted-foreground mt-2">
               Create your account and start sharing your thoughts
@@ -111,37 +107,6 @@ export default function RegisterPage() {
               </div>
               {errors.username && (
                 <p className="text-destructive text-xs mt-1">{errors.username}</p>
-              )}
-            </div>
-
-            {/* Email */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium mb-2">
-                Email
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <input
-                  id="email"
-                  type="text"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(e) => {
-                    setEmail(e.target.value);
-                    if (errors.email) {
-                      setErrors({ ...errors, email: "" });
-                    }
-                  }}
-                  placeholder="Enter your email"
-                  className={`cinematic-input pl-10 ${
-                    errors.email ? "border-destructive" : ""
-                  }`}
-                  required
-                />
-              </div>
-              {errors.email && (
-                <p className="text-destructive text-xs mt-1">{errors.email}</p>
               )}
             </div>
 

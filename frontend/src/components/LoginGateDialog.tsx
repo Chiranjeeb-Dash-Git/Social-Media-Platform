@@ -14,7 +14,7 @@ type LoginGateDialogProps = {
 
 export function LoginGateDialog({ onClose, onSuccess }: LoginGateDialogProps) {
   const { login } = useAuth();
-  const [email, setEmail] = useState("");
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -24,7 +24,7 @@ export function LoginGateDialog({ onClose, onSuccess }: LoginGateDialogProps) {
     setIsSubmitting(true);
 
     try {
-      await login(email, password);
+      await login(username, password);
       onSuccess();
     } finally {
       setIsSubmitting(false);
@@ -54,7 +54,7 @@ export function LoginGateDialog({ onClose, onSuccess }: LoginGateDialogProps) {
                 Log in to create a post
               </h2>
               <p className="mt-2 text-sm text-muted-foreground">
-                You can browse, vote, and comment as guest. Posting needs an account.
+                Sign in with your unique user ID and password to continue.
               </p>
             </div>
             <Button
@@ -70,19 +70,18 @@ export function LoginGateDialog({ onClose, onSuccess }: LoginGateDialogProps) {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <label htmlFor="create-login-email" className="mb-2 block text-sm font-medium">
-                Email
+              <label htmlFor="create-login-username" className="mb-2 block text-sm font-medium">
+                User ID
               </label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <input
-                  id="create-login-email"
+                  id="create-login-username"
                   type="text"
-                  inputMode="email"
-                  autoComplete="email"
-                  value={email}
-                  onChange={(event) => setEmail(event.target.value)}
-                  placeholder="Enter your email"
+                  autoComplete="username"
+                  value={username}
+                  onChange={(event) => setUsername(event.target.value)}
+                  placeholder="Enter your user ID"
                   className="cinematic-input pl-10"
                   required
                 />
@@ -123,7 +122,7 @@ export function LoginGateDialog({ onClose, onSuccess }: LoginGateDialogProps) {
             <Button
               type="submit"
               className="cinematic-button w-full"
-              disabled={isSubmitting || !email.trim() || !password}
+              disabled={isSubmitting || !username.trim() || !password}
             >
               {isSubmitting ? "Logging in..." : "Log in and continue"}
             </Button>

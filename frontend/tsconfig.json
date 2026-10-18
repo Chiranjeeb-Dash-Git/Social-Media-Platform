@@ -17,6 +17,7 @@
     "isolatedModules": true,
     "jsx": "preserve",
     "incremental": true,
+    "baseUrl": ".",
     "typeRoots": [
       "../node_modules/@types",
       "./node_modules/@types"
